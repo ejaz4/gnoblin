@@ -61,6 +61,7 @@ class OpenSUSELeapWorkflowTests(unittest.TestCase):
             "libXext-devel",
             "libXrender-devel",
             "fribidi-devel",
+            "harfbuzz-devel",
         ):
             self.assertEqual(provision.count(package), 2)
         self.assertIn("install --allow-downgrade --no-recommends", provision)
