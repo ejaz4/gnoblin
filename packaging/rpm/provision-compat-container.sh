@@ -32,7 +32,7 @@ case "${ID}:${VERSION_ID}" in
             gcc gcc-c++ make meson ninja pkgconf-pkg-config python3 python3-devel \
             python3-setuptools flex bison gettext-tools libffi-devel pcre2-devel zlib-devel \
             libmount-devel libselinux-devel libexpat-devel libxml2-devel libpng16-devel libjpeg8-devel \
-            fontconfig-devel freetype2-devel libX11-devel libXext-devel tar xz patch git
+            fontconfig-devel freetype2-devel libX11-devel libXext-devel libXrender-devel tar xz patch git
         ;;
     opensuse-leap:15.5 | opensuse-leap:15.6)
         # The archived Leap 15 repositories have newer libncurses metadata
@@ -41,7 +41,7 @@ case "${ID}:${VERSION_ID}" in
         zypper --non-interactive --quiet install --allow-downgrade --no-recommends \
             gcc gcc-c++ make pkg-config python3-devel flex bison gettext-tools \
             libffi-devel pcre2-devel zlib-devel libmount-devel libselinux-devel libexpat-devel libxml2-devel libpng16-devel libjpeg8-devel \
-            fontconfig-devel freetype2-devel libX11-devel libXext-devel \
+            fontconfig-devel freetype2-devel libX11-devel libXext-devel libXrender-devel \
             libopenssl-devel sqlite3-devel xz-devel libbz2-devel tar gzip xz patch git curl
         python_archive=/tmp/Python-3.9.20.tgz
         curl --fail --location --silent --show-error \
