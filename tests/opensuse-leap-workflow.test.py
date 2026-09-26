@@ -54,6 +54,8 @@ class OpenSUSELeapWorkflowTests(unittest.TestCase):
         self.assertIn("libexpat-devel libxml2-devel", provision)
         self.assertEqual(provision.count("libpng16-devel"), 2)
         self.assertIn("install --allow-downgrade --no-recommends", provision)
+        self.assertIn("useradd --create-home --user-group", provision)
+        self.assertIn("ln -s libpng16.pc /usr/lib64/pkgconfig/libpng.pc", provision)
 
     def test_bootstrap_installs_checkout_tools_before_actions_checkout(self):
         workflow = (ROOT / ".github/workflows/rpm-compat-bootstrap.yml").read_text()

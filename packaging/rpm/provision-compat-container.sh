@@ -56,4 +56,13 @@ case "${ID}:${VERSION_ID}" in
         ;;
 esac
 
-id -u gnoblin-build >/dev/null 2>&1 || useradd --create-home --shell /bin/bash gnoblin-build
+# Leap packages the libpng 1.6 metadata as libpng16.pc even though the
+# project name is libpng.  Gdk-pixbuf resolves the conventional libpng.pc
+# name, so provide the equivalent filename inside the ephemeral build image.
+if [[ ${ID} == opensuse-leap && -f /usr/lib64/pkgconfig/libpng16.pc && ! -e /usr/lib64/pkgconfig/libpng.pc ]]; then
+    ln -s libpng16.pc /usr/lib64/pkgconfig/libpng.pc
+fi
+
+# Leap 15.5 disables user-private groups by default.  The runtime build owns
+# its staging prefix as this account, so create its primary group explicitly.
+id -u gnoblin-build >/dev/null 2>&1 || useradd --create-home --user-group --shell /bin/bash gnoblin-build
