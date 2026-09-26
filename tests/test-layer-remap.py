@@ -34,9 +34,7 @@ with tempfile.TemporaryDirectory(prefix="gnoblin-layer-remap-") as directory:
         check=True,
     )
     for settle, label in [(0, "immediately"), (1, "after the unmap is processed")]:
-        result = subprocess.run(
-            [str(build / "client"), "4", str(settle)], capture_output=True, text=True, timeout=10
-        )
+        result = subprocess.run([str(build / "client"), "4", str(settle)], capture_output=True, text=True, timeout=10)
         assert result.returncode == 0, (label, result.stdout, result.stderr)
         assert result.stdout.split() == ["MAPPED", "1", "MAPPED", "2", "MAPPED", "3", "MAPPED", "4"], (
             label,
