@@ -52,6 +52,7 @@ class OpenSUSELeapWorkflowTests(unittest.TestCase):
         for script in (provision, runtime, bootstrap):
             self.assertIn("opensuse-leap:15.5 | opensuse-leap:15.6", script)
         self.assertIn("libexpat-devel libxml2-devel", provision)
+        self.assertIn("install --allow-downgrade --no-recommends", provision)
 
     def test_bootstrap_installs_checkout_tools_before_actions_checkout(self):
         workflow = (ROOT / ".github/workflows/rpm-compat-bootstrap.yml").read_text()

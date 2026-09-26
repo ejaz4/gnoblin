@@ -34,7 +34,10 @@ case "${ID}:${VERSION_ID}" in
             libmount-devel libselinux-devel libexpat-devel libxml2-devel tar xz patch git
         ;;
     opensuse-leap:15.5 | opensuse-leap:15.6)
-        zypper --non-interactive --quiet install --no-recommends \
+        # The archived Leap 15 repositories have newer libncurses metadata
+        # than the readline-devel required by libxml2-devel.  Let zypper
+        # restore the repository-consistent version inside this build image.
+        zypper --non-interactive --quiet install --allow-downgrade --no-recommends \
             gcc gcc-c++ make pkg-config python3-devel flex bison gettext-tools \
             libffi-devel pcre2-devel zlib-devel libmount-devel libselinux-devel libexpat-devel libxml2-devel \
             libopenssl-devel sqlite3-devel xz-devel libbz2-devel tar gzip xz patch git curl
