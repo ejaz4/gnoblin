@@ -102,11 +102,13 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_arch_release_installs_the_main_package_not_the_debug_split(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         arch = workflow.split("  arch-package:\n", 1)[1].split("\n  opensuse-package:\n", 1)[0]
+        github_release = workflow.split("  github-release:\n", 1)[1].split("\n  apt-repository:\n", 1)[0]
         self.assertIn("-name 'gnoblin-[0-9]*.pkg.tar.zst'", arch)
         self.assertIn("pacman -Q gnoblin", arch)
         self.assertIn("path: build/gnoblin-[0-9]*.pkg.tar.zst", arch)
         self.assertNotIn("path: build/*.pkg.tar.zst", arch)
         self.assertIn("share/icons/Adwaita-Hyprcursor/manifest.hl", arch)
+        self.assertIn("gnoblin-arch-x86_64.pkg.tar.zst", github_release)
 
     def test_arch_build_uses_the_release_cursor_theme_without_inkscape(self):
         pkgbuild = (ROOT / "packaging/arch/PKGBUILD").read_text()

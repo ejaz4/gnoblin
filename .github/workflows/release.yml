@@ -170,6 +170,15 @@ jobs:
           name: arch-package-${{ env.RELEASE_TAG }}
           path: release-assets
           merge-multiple: true
+      - name: Add stable Arch package download name
+        run: |
+          mapfile -t arch_packages < <(
+            find release-assets -maxdepth 1 -type f \
+              -name 'gnoblin-[0-9]*.pkg.tar.zst' -print | LC_ALL=C sort
+          )
+          ((${#arch_packages[@]} == 1))
+          cp -- "${arch_packages[0]}" \
+            release-assets/gnoblin-arch-x86_64.pkg.tar.zst
       - uses: actions/download-artifact@v4
         with:
           name: opensuse-tumbleweed-rpms
