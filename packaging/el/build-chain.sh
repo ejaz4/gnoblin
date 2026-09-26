@@ -28,7 +28,7 @@ dnf config-manager --set-enabled crb || dnf config-manager --set-enabled powerto
 # The GNOME 51 gdk-pixbuf build consumes this interface while composing the
 # private runtime.  It is a host build tool and remains outside the RPM.
 dnf -y install \
-    cargo rust fontconfig-devel freetype-devel fribidi-devel libjpeg-turbo-devel libpng-devel libtiff-devel libX11-devel libXext-devel \
+    cargo rust fontconfig-devel freetype-devel fribidi-devel harfbuzz-devel libjpeg-turbo-devel libpng-devel libtiff-devel libX11-devel libXext-devel \
     libXrender-devel pixman-devel shared-mime-info
 dnf -y install rpm-build redhat-rpm-config
 install -d -o gnoblin-build -g gnoblin-build /usr/lib/gnoblin
