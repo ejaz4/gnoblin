@@ -23,7 +23,7 @@ case "${ID}:${VERSION_ID}" in
         dnf -qy install \
             gcc gcc-c++ make pkgconf-pkg-config python3 python3-devel python3-pip \
             python3-setuptools flex bison gettext libffi-devel pcre2-devel zlib-devel \
-            libmount-devel libselinux-devel libexpat-devel tar xz patch git
+            libmount-devel libselinux-devel expat-devel tar xz patch git
         python3 -m venv /opt/gnoblin-rpm-compat-tools
         /opt/gnoblin-rpm-compat-tools/bin/pip install --disable-pip-version-check --quiet setuptools meson==1.10.1 ninja
         ;;
