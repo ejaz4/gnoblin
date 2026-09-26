@@ -66,6 +66,11 @@ class PackageLayoutTests(unittest.TestCase):
         )
         self.assertIn("cairo.pc", cairo["private_pkgconfig"])
         self.assertIn("-Dxlib=enabled", cairo["options"])
+        self.assertEqual(cairo["requires"], ["glib-final", "pixman", "freetype"])
+        self.assertEqual(by_name["pixman"]["version"], "0.42.2")
+        self.assertIn("pixman-1.pc", by_name["pixman"]["private_pkgconfig"])
+        self.assertEqual(by_name["freetype"]["version"], "2.13.3")
+        self.assertIn("freetype2.pc", by_name["freetype"]["private_pkgconfig"])
         compatibility = (ROOT / "scripts/build-deb-compat-runtime.sh").read_text()
         self.assertIn('recipe["requires"] = ["cairo", "librsvg"]', compatibility)
 

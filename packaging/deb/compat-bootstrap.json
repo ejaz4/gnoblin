@@ -60,11 +60,29 @@
     "options": ["-Dman=false", "-Dtests=false", "-Dinstalled_tests=false"]
   },
   {
+    "name": "pixman",
+    "version": "0.42.2",
+    "url": "https://www.x.org/releases/individual/lib/pixman-0.42.2.tar.xz",
+    "sha256": "5747d2ec498ad0f1594878cc897ef5eb6c29e91c53b899f7f71b506785fc1376",
+    "requires": ["glib-final"],
+    "private_pkgconfig": ["pixman-1.pc"],
+    "options": []
+  },
+  {
+    "name": "freetype",
+    "version": "2.13.3",
+    "url": "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.3.tar.xz",
+    "sha256": "0550350666d427c74daeb85d5ac7bb353acba5f76956395995311a9c6f063289",
+    "requires": ["glib-final"],
+    "private_pkgconfig": ["freetype2.pc"],
+    "options": []
+  },
+  {
     "name": "cairo",
     "version": "1.18.4",
     "url": "https://cairographics.org/releases/cairo-1.18.4.tar.xz",
     "sha256": "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb",
-    "requires": ["glib-final"],
+    "requires": ["glib-final", "pixman", "freetype"],
     "private_pkgconfig": ["cairo.pc"],
     "options": [
       "-Dtests=disabled",
