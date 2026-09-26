@@ -60,6 +60,21 @@
     "options": ["-Dman=false", "-Dtests=false", "-Dinstalled_tests=false"]
   },
   {
+    "name": "cairo",
+    "version": "1.18.4",
+    "url": "https://cairographics.org/releases/cairo-1.18.4.tar.xz",
+    "sha256": "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb",
+    "requires": ["glib-final"],
+    "private_pkgconfig": ["cairo.pc"],
+    "options": [
+      "-Dtests=disabled",
+      "-Dspectre=disabled",
+      "-Dsymbol-lookup=disabled",
+      "-Dxcb=disabled",
+      "-Dxlib=disabled"
+    ]
+  },
+  {
     "name": "gtk4",
     "version": "4.14.5",
     "url": "https://download.gnome.org/sources/gtk/4.14/gtk-4.14.5.tar.xz",
@@ -89,7 +104,7 @@
     "version": "1.50.14",
     "url": "https://download.gnome.org/sources/pango/1.50/pango-1.50.14.tar.xz",
     "sha256": "1d67f205bfc318c27a29cfdfb6828568df566795df0cb51d2189cde7f2d581e8",
-    "requires": ["glib-final", "gobject-introspection-bootstrap"],
+    "requires": ["glib-final", "gobject-introspection-bootstrap", "cairo"],
     "private_pkgconfig": ["pango.pc", "pangocairo.pc", "pangoft2.pc"],
     "private_typelibs": ["Pango-1.0.typelib", "PangoCairo-1.0.typelib"],
     "options": [

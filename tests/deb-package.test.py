@@ -44,6 +44,21 @@ class PackageLayoutTests(unittest.TestCase):
         self.assertIn("Pango-1.0.typelib", pango["private_typelibs"])
         self.assertIn("pango", gtk4["requires"])
 
+    def test_legacy_compatibility_runtime_supplies_glycins_cairo_floor(self):
+        bootstrap = json.loads((ROOT / "packaging/deb/compat-bootstrap.json").read_text())
+        addons = json.loads((ROOT / "packaging/deb/build-dependencies.json").read_text())
+        by_name = {recipe["name"]: recipe for recipe in bootstrap}
+        glycin = next(recipe for recipe in addons if recipe["name"] == "glycin")
+
+        cairo = by_name["cairo"]
+        self.assertEqual(cairo["version"], "1.18.4")
+        self.assertEqual(
+            cairo["sha256"],
+            "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb",
+        )
+        self.assertIn("cairo.pc", cairo["private_pkgconfig"])
+        self.assertIn("cairo", glycin["requires"])
+
     def test_legacy_compatibility_runtime_uses_modern_cbindgen(self):
         provision = (ROOT / "scripts/provision-deb-compat-container.sh").read_text()
         self.assertIn("cargo install cbindgen", provision)
