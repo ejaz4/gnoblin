@@ -43,6 +43,7 @@ export PATH="/opt/gnoblin-compat-build-tools/bin:$PATH"
 CARGO_HOME=/opt/gnoblin-compat-build-tools/cargo-home \
     /opt/gnoblin-compat-build-tools/bin/cargo install cbindgen \
     --version 0.28.0 --locked --root /opt/gnoblin-compat-build-tools
+test "$(/opt/gnoblin-compat-build-tools/bin/cbindgen --version)" = 'cbindgen 0.28.0'
 CARGO_HOME=/opt/gnoblin-compat-build-tools/cargo-home \
     /opt/gnoblin-compat-build-tools/bin/cargo install just \
     --version 1.40.0 --locked --root /opt/gnoblin-compat-build-tools

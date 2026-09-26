@@ -48,6 +48,7 @@ class PackageLayoutTests(unittest.TestCase):
         provision = (ROOT / "scripts/provision-deb-compat-container.sh").read_text()
         self.assertIn("cargo install cbindgen", provision)
         self.assertIn("--version 0.28.0", provision)
+        self.assertIn("cbindgen --version)\" = 'cbindgen 0.28.0'", provision)
 
     def test_distributed_copyright_keeps_company_and_upstream_attribution(self):
         text = package.debian_copyright_text()
