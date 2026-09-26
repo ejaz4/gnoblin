@@ -42,7 +42,16 @@ jobs:
             artifact: opensuse-leap-16.0-rpms
     steps:
       - name: Refresh the fixed Leap repositories
-        run: zypper --non-interactive refresh
+        run: |
+          for attempt in 1 2 3; do
+            if zypper --non-interactive refresh --force; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
       - name: Install checkout and RPM tools
         run: |
           zypper --non-interactive install \
@@ -104,7 +113,16 @@ jobs:
             artifact: opensuse-leap-16.0-rpms
     steps:
       - name: Refresh the fixed Leap repositories
-        run: zypper --non-interactive refresh
+        run: |
+          for attempt in 1 2 3; do
+            if zypper --non-interactive refresh --force; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
       - name: Install verification tools
         run: zypper --non-interactive install python3 rpm
       - uses: actions/checkout@v4

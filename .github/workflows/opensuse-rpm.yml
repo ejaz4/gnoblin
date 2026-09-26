@@ -38,7 +38,18 @@ jobs:
     steps:
       - name: Install checkout and RPM tools
         run: |
-          zypper --non-interactive refresh
+          # The Tumbleweed metadata CDN can briefly reject its AppData file.
+          # Keep metadata current, but retry that transient failure before
+          # treating it as an adapter failure.
+          for attempt in 1 2 3; do
+            if zypper --non-interactive refresh --force; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
           zypper --non-interactive install git hyprcursor librsvg-2-2 meson patch rpm-build tar xz python3
       - uses: actions/checkout@v4
         with:
@@ -87,7 +98,15 @@ jobs:
     steps:
       - name: Install verification tools
         run: |
-          zypper --non-interactive refresh
+          for attempt in 1 2 3; do
+            if zypper --non-interactive refresh --force; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
           zypper --non-interactive install python3 rpm
       - uses: actions/checkout@v4
         with:

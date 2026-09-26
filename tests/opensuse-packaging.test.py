@@ -125,6 +125,13 @@ class OpenSUSEPackagingTests(unittest.TestCase):
             self.assertIn("%{_prefix}/deps/lib64/pkgconfig", spec)
             self.assertIn("%{_prefix}/deps/lib64", spec)
 
+    def test_workflows_retry_transient_repository_metadata_failures(self):
+        for name in ("opensuse-rpm.yml", "opensuse-leap.yml"):
+            workflow = (ROOT / ".github" / "workflows" / name).read_text()
+            self.assertIn("for attempt in 1 2 3", workflow)
+            self.assertIn("zypper --non-interactive refresh --force", workflow)
+            self.assertIn('sleep "$((attempt * 15))"', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
