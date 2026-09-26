@@ -63,6 +63,21 @@ class PackageLayoutTests(unittest.TestCase):
         self.assertIn("cairo.pc", cairo["private_pkgconfig"])
         self.assertIn("cairo", glycin["requires"])
 
+    def test_debian11_compatibility_runtime_supplies_glycins_librsvg_floor(self):
+        bootstrap = json.loads((ROOT / "packaging/deb/compat-bootstrap.json").read_text())
+        addons = json.loads((ROOT / "packaging/deb/build-dependencies.json").read_text())
+        by_name = {recipe["name"]: recipe for recipe in bootstrap}
+        glycin = next(recipe for recipe in addons if recipe["name"] == "glycin")
+
+        librsvg = by_name["librsvg"]
+        self.assertEqual(librsvg["version"], "2.52.5")
+        self.assertEqual(
+            librsvg["sha256"],
+            "407cbbab518137ea18a3f3220bea180fbee75f3e5bd6ba10a7a862c1a6f74d82",
+        )
+        self.assertIn("librsvg-2.0.pc", librsvg["private_pkgconfig"])
+        self.assertIn("librsvg", glycin["requires"])
+
     def test_legacy_compatibility_runtime_uses_modern_cbindgen(self):
         provision = (ROOT / "scripts/provision-deb-compat-container.sh").read_text()
         self.assertIn("cargo install cbindgen", provision)

@@ -75,6 +75,15 @@
     ]
   },
   {
+    "name": "librsvg",
+    "version": "2.52.5",
+    "url": "https://download.gnome.org/sources/librsvg/2.52/librsvg-2.52.5.tar.xz",
+    "sha256": "407cbbab518137ea18a3f3220bea180fbee75f3e5bd6ba10a7a862c1a6f74d82",
+    "requires": ["glib-final", "cairo", "pango"],
+    "private_pkgconfig": ["librsvg-2.0.pc"],
+    "options": []
+  },
+  {
     "name": "gtk4",
     "version": "4.14.5",
     "url": "https://download.gnome.org/sources/gtk/4.14/gtk-4.14.5.tar.xz",

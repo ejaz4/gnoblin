@@ -21,7 +21,7 @@
     "url": "https://download.gnome.org/sources/glycin/2.0/glycin-2.0.0.tar.xz",
     "sha256": "e39c3ca4f5bd6905f19f090456940650c8de1f217d2edb1f46ee17e04e7ae502",
     "build_system": "meson",
-    "requires": ["cairo"],
+    "requires": ["cairo", "librsvg"],
     "options": [
       "-Dlibglycin=true",
       "-Dglycin-loaders=true",
