@@ -9,14 +9,14 @@ check. Keep a working session available while testing. See
 
 ## Install
 
-Download all RPM assets from the
+Download all Tumbleweed RPM assets from the
 [latest Gnoblin release](https://github.com/kierandrewett/gnoblin/releases),
-once it includes files named `opensuse-*.rpm`. Install the complete set
+once it includes files named `opensuse-tumbleweed-*.rpm`. Install the complete set
 together. With GitHub CLI:
 
 ```sh
 mkdir -p gnoblin-rpms
-gh release download --repo kierandrewett/gnoblin --pattern 'opensuse-*.rpm' --dir gnoblin-rpms
+gh release download --repo kierandrewett/gnoblin --pattern 'opensuse-tumbleweed-*.rpm' --dir gnoblin-rpms
 sudo zypper install --allow-unsigned-rpm ./gnoblin-rpms/*.rpm
 ```
 

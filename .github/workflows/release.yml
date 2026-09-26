@@ -59,6 +59,16 @@ jobs:
     with:
       ref: ${{ inputs.tag || github.ref }}
 
+  el-packages:
+    uses: ./.github/workflows/el-rpm.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
+
+  opensuse-leap-packages:
+    uses: ./.github/workflows/opensuse-leap.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
+
   opensuse-package:
     uses: ./.github/workflows/opensuse-rpm.yml
     with:
@@ -146,7 +156,9 @@ jobs:
     needs:
       - source-packages
       - debian-packages
+      - el-packages
       - arch-package
+      - opensuse-leap-packages
       - opensuse-package
       - nixos-release
     runs-on: ubuntu-latest
@@ -170,6 +182,36 @@ jobs:
           name: arch-package-${{ env.RELEASE_TAG }}
           path: release-assets
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: el-*-rpms
+          path: el-rpms
+      - name: Flatten Enterprise Linux RPM assets
+        run: |
+          mkdir -p release-assets
+          mapfile -d '' rpms < <(
+            find el-rpms -type f -name '*.rpm' \
+              ! -name '*-debuginfo-*' ! -name '*-debugsource-*' -print0
+          )
+          ((${#rpms[@]} > 0))
+          for rpm in "${rpms[@]}"; do
+            cp -- "$rpm" "release-assets/el-$(basename "$rpm")"
+          done
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: opensuse-leap-*-rpms
+          path: opensuse-leap-rpms
+      - name: Flatten openSUSE Leap RPM assets
+        run: |
+          mkdir -p release-assets
+          mapfile -d '' rpms < <(
+            find opensuse-leap-rpms -type f -name '*.rpm' \
+              ! -name '*-debuginfo-*' ! -name '*-debugsource-*' -print0
+          )
+          ((${#rpms[@]} > 0))
+          for rpm in "${rpms[@]}"; do
+            cp -- "$rpm" "release-assets/opensuse-leap-$(basename "$rpm")"
+          done
       - name: Add stable Arch package download name
         run: |
           mapfile -t arch_packages < <(
@@ -193,7 +235,7 @@ jobs:
           )
           (("${#rpms[@]}" > 0))
           for rpm in "${rpms[@]}"; do
-            cp -- "$rpm" "release-assets/opensuse-$(basename "$rpm")"
+            cp -- "$rpm" "release-assets/opensuse-tumbleweed-$(basename "$rpm")"
           done
       - name: Checksum all release assets
         run: |

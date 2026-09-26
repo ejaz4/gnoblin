@@ -10,14 +10,14 @@ checks, but still need a verified graphical login.
 
 ## Choose your system
 
-| System                              | Test path                                                                                   |
-| ----------------------------------- | ------------------------------------------------------------------------------------------- |
-| Fedora 43, 44 and 45                | [COPR package candidate](install-fedora.md)                                                 |
-| Debian 13, Ubuntu 24.04 and 26.04   | [APT package candidates](install-debian.md)                                                 |
-| Arch / CachyOS                      | [Release package candidate](install-arch.md)                                                |
-| openSUSE Tumbleweed                 | [Build the RPM](https://github.com/kierandrewett/gnoblin/blob/main/packaging/rpm/README.md) |
-| NixOS 25.05, 25.11, 26.05, unstable | [Flake package candidate and module](install-nixos.md)                                      |
-| Other releases                      | [Build from source](install-source.md)                                                      |
+| System                              | Test path                                              |
+| ----------------------------------- | ------------------------------------------------------ |
+| Fedora 43, 44 and 45                | [COPR package candidate](install-fedora.md)            |
+| Debian 13, Ubuntu 24.04 and 26.04   | [APT package candidates](install-debian.md)            |
+| Arch / CachyOS                      | [Release package candidate](install-arch.md)           |
+| openSUSE Tumbleweed                 | [Release RPM candidate](install-opensuse.md)           |
+| NixOS 25.05, 25.11, 26.05, unstable | [Flake package candidate and module](install-nixos.md) |
+| Other releases                      | [Build from source](install-source.md)                 |
 
 The candidate package checks show GNOME can coexist with Gnoblin on the listed
 targets. Keep an existing GNOME or other session available while testing.

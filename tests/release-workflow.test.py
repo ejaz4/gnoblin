@@ -74,7 +74,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
         arch_gate = workflow.split("  arch-package:\n", 1)[1].split("\n  opensuse-package:\n", 1)[0]
         self.assertIn("needs: [source-packages]", arch_gate)
         release_gate = workflow.split("  github-release:\n", 1)[1].split("    runs-on:", 1)[0]
-        for job in ("source-packages", "debian-packages", "arch-package", "opensuse-package", "nixos-release"):
+        for job in (
+            "source-packages",
+            "debian-packages",
+            "el-packages",
+            "arch-package",
+            "opensuse-leap-packages",
+            "opensuse-package",
+            "nixos-release",
+        ):
             self.assertIn(f"      - {job}\n", release_gate)
         self.assertIn("git submodule foreach --recursive 'git fetch --force --tags origin'", workflow)
         self.assertIn("GIT_COMMITTER_NAME: Gnoblin release automation", workflow)
@@ -139,7 +147,22 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("find opensuse-rpms -type f -name '*.rpm'", workflow)
         self.assertIn("! -name '*-debuginfo-*'", workflow)
         self.assertIn("! -name '*-debugsource-*'", workflow)
-        self.assertIn('"release-assets/opensuse-$(basename "$rpm")"', workflow)
+        self.assertIn('"release-assets/opensuse-tumbleweed-$(basename "$rpm")"', workflow)
+
+    def test_release_waits_for_and_publishes_el_and_leap_rpms(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        release_gate = workflow.split("  github-release:\n", 1)[1].split("    runs-on:", 1)[0]
+        for job, reusable in (
+            ("el-packages", "el-rpm.yml"),
+            ("opensuse-leap-packages", "opensuse-leap.yml"),
+        ):
+            self.assertIn(f"{job}:", workflow)
+            self.assertIn(f"uses: ./.github/workflows/{reusable}", workflow)
+            self.assertIn(f"      - {job}\n", release_gate)
+        self.assertIn("pattern: el-*-rpms", workflow)
+        self.assertIn('"release-assets/el-$(basename "$rpm")"', workflow)
+        self.assertIn("pattern: opensuse-leap-*-rpms", workflow)
+        self.assertIn('"release-assets/opensuse-leap-$(basename "$rpm")"', workflow)
 
     def test_release_builds_the_pinned_nixos_package_before_publication(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
