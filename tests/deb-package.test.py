@@ -29,6 +29,12 @@ class PackageLayoutTests(unittest.TestCase):
         provision = (ROOT / "scripts/provision-deb-container.sh").read_text()
         self.assertIn("systemd-dev", provision)
 
+    def test_deb_builders_keep_their_composed_manifest_for_runtime_checks(self):
+        normal = (ROOT / "scripts/build-deb.sh").read_text()
+        compatibility = (ROOT / "scripts/build-deb-compat-runtime.sh").read_text()
+        self.assertGreaterEqual(normal.count("--manifest build/deb-dependencies.json"), 3)
+        self.assertGreaterEqual(compatibility.count("--manifest build/compat-runtime-dependencies.json"), 3)
+
     def test_private_deb_addons_do_not_require_missing_host_glycin_or_hyprcursor(self):
         dependencies = (ROOT / "scripts/build-deps.sh").read_text()
         filtered = dependencies.split('if "$private_deb_addons"; then', 1)[1].split("fi", 1)[0]
@@ -50,9 +56,7 @@ class PackageLayoutTests(unittest.TestCase):
 
     def test_legacy_compatibility_runtime_supplies_glycins_cairo_floor(self):
         bootstrap = json.loads((ROOT / "packaging/deb/compat-bootstrap.json").read_text())
-        addons = json.loads((ROOT / "packaging/deb/build-dependencies.json").read_text())
         by_name = {recipe["name"]: recipe for recipe in bootstrap}
-        glycin = next(recipe for recipe in addons if recipe["name"] == "glycin")
 
         cairo = by_name["cairo"]
         self.assertEqual(cairo["version"], "1.18.4")
@@ -61,13 +65,12 @@ class PackageLayoutTests(unittest.TestCase):
             "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb",
         )
         self.assertIn("cairo.pc", cairo["private_pkgconfig"])
-        self.assertIn("cairo", glycin["requires"])
+        compatibility = (ROOT / "scripts/build-deb-compat-runtime.sh").read_text()
+        self.assertIn('recipe["requires"] = ["cairo", "librsvg"]', compatibility)
 
     def test_debian11_compatibility_runtime_supplies_glycins_librsvg_floor(self):
         bootstrap = json.loads((ROOT / "packaging/deb/compat-bootstrap.json").read_text())
-        addons = json.loads((ROOT / "packaging/deb/build-dependencies.json").read_text())
         by_name = {recipe["name"]: recipe for recipe in bootstrap}
-        glycin = next(recipe for recipe in addons if recipe["name"] == "glycin")
 
         librsvg = by_name["librsvg"]
         self.assertEqual(librsvg["version"], "2.52.5")
@@ -76,7 +79,6 @@ class PackageLayoutTests(unittest.TestCase):
             "407cbbab518137ea18a3f3220bea180fbee75f3e5bd6ba10a7a862c1a6f74d82",
         )
         self.assertIn("librsvg-2.0.pc", librsvg["private_pkgconfig"])
-        self.assertIn("librsvg", glycin["requires"])
 
     def test_legacy_compatibility_runtime_uses_modern_cbindgen(self):
         provision = (ROOT / "scripts/provision-deb-compat-container.sh").read_text()

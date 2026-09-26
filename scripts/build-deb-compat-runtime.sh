@@ -64,6 +64,16 @@ for recipe in [*debian, *base]:
     names.add(recipe["name"])
     combined.append(recipe)
 
+# Glycin uses the host Cairo and librsvg on current Debian-family releases.
+# Older targets build both libraries privately, so only their composed
+# compatibility graph needs explicit edges to them.
+for recipe in combined:
+    if recipe["name"] == "glycin":
+        recipe["requires"] = ["cairo", "librsvg"]
+        break
+else:
+    raise SystemExit("compatibility graph is missing glycin")
+
 required = {
     "glib-final", "wayland", "wayland-protocols", "gtk4", "gcr4", "pango", "libheif", "glycin",
     "libei", "libdisplay-info", "hyprcursor", "mozjs", "gjs", "gnome-desktop",
@@ -82,9 +92,9 @@ python3 scripts/build-private-deps.py \
     --prefix /usr/lib/gnoblin/deps \
     --manifest build/compat-runtime-dependencies.json \
     --jobs "${GNOBLIN_BUILD_JOBS:-2}"
-python3 scripts/build-private-deps.py --prefix /usr/lib/gnoblin/deps --run \
+python3 scripts/build-private-deps.py --prefix /usr/lib/gnoblin/deps --manifest build/compat-runtime-dependencies.json --run \
     env GNOBLIN_PREFIX=/usr/lib/gnoblin GNOBLIN_LIBDIR=lib64 GNOBLIN_DEVKIT=disabled \
     just build-local
-python3 scripts/build-private-deps.py --prefix /usr/lib/gnoblin/deps \
+python3 scripts/build-private-deps.py --prefix /usr/lib/gnoblin/deps --manifest build/compat-runtime-dependencies.json \
     --fix-runtime --runtime-prefix /usr/lib/gnoblin
 python3 scripts/package-deb.py "$@"

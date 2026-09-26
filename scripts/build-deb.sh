@@ -38,8 +38,8 @@ Path("build/deb-dependencies.json").write_text(json.dumps(base))
 MANIFEST
 just init
 python3 scripts/build-private-deps.py --prefix "$prefix/deps" --manifest build/deb-dependencies.json --jobs "${GNOBLIN_BUILD_JOBS:-4}"
-python3 scripts/build-private-deps.py --prefix "$prefix/deps" --run \
+python3 scripts/build-private-deps.py --prefix "$prefix/deps" --manifest build/deb-dependencies.json --run \
     env GNOBLIN_PREFIX="$prefix" GNOBLIN_LIBDIR=lib64 GNOBLIN_DEVKIT=disabled just build-local
-python3 scripts/build-private-deps.py --prefix "$prefix/deps" \
+python3 scripts/build-private-deps.py --prefix "$prefix/deps" --manifest build/deb-dependencies.json \
     --fix-runtime --runtime-prefix "$prefix"
 python3 scripts/package-deb.py "$@"
