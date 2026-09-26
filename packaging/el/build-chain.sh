@@ -19,6 +19,11 @@ install_output() {
     dnf -y --setopt=install_weak_deps=False --nogpgcheck install "$@"
 }
 
+# EPEL provides development interfaces which are not part of the Enterprise
+# Linux base repositories.  CRB is named PowerTools on EL 8; accepting either
+# name keeps this adapter on each currently supported EL major.
+dnf -y install dnf-plugins-core epel-release
+dnf config-manager --set-enabled crb || dnf config-manager --set-enabled powertools || true
 "$ROOT/packaging/rpm/provision-compat-container.sh"
 dnf -y install rpm-build redhat-rpm-config
 install -d -o gnoblin-build -g gnoblin-build /usr/lib/gnoblin
