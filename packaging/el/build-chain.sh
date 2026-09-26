@@ -27,7 +27,8 @@ dnf config-manager --set-enabled crb || dnf config-manager --set-enabled powerto
 "$ROOT/packaging/rpm/provision-compat-container.sh"
 # The GNOME 51 gdk-pixbuf build consumes this interface while composing the
 # private runtime.  It is a host build tool and remains outside the RPM.
-dnf -y install shared-mime-info libjpeg-turbo-devel libpng-devel
+dnf -y install \
+    fontconfig-devel freetype-devel libjpeg-turbo-devel libpng-devel pixman-devel shared-mime-info
 dnf -y install rpm-build redhat-rpm-config
 install -d -o gnoblin-build -g gnoblin-build /usr/lib/gnoblin
 mkdir -p "$ROOT/build"
