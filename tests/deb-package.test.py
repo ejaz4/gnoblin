@@ -52,6 +52,9 @@ class PackageLayoutTests(unittest.TestCase):
         self.assertIn("pango.pc", pango["private_pkgconfig"])
         self.assertIn("pangocairo.pc", pango["private_pkgconfig"])
         self.assertIn("Pango-1.0.typelib", pango["private_typelibs"])
+        self.assertIn("fribidi", pango["requires"])
+        self.assertEqual(by_name["fribidi"]["version"], "1.0.16")
+        self.assertIn("fribidi.pc", by_name["fribidi"]["private_pkgconfig"])
         self.assertIn("pango", gtk4["requires"])
 
     def test_legacy_compatibility_runtime_supplies_glycins_cairo_floor(self):

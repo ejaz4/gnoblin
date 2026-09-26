@@ -128,11 +128,20 @@
     "options": ["-Dvapi=false", "-Dgtk_doc=false", "-Dintrospection=false"]
   },
   {
+    "name": "fribidi",
+    "version": "1.0.16",
+    "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz",
+    "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c",
+    "requires": ["glib-final"],
+    "private_pkgconfig": ["fribidi.pc"],
+    "options": ["-Ddocs=false", "-Dbin=false", "-Dtests=false"]
+  },
+  {
     "name": "pango",
     "version": "1.50.14",
     "url": "https://download.gnome.org/sources/pango/1.50/pango-1.50.14.tar.xz",
     "sha256": "1d67f205bfc318c27a29cfdfb6828568df566795df0cb51d2189cde7f2d581e8",
-    "requires": ["glib-final", "gobject-introspection-bootstrap", "cairo"],
+    "requires": ["glib-final", "gobject-introspection-bootstrap", "cairo", "fribidi"],
     "private_pkgconfig": ["pango.pc", "pangocairo.pc", "pangoft2.pc"],
     "private_typelibs": ["Pango-1.0.typelib", "PangoCairo-1.0.typelib"],
     "options": [
