@@ -25,6 +25,10 @@ class PackageLayoutTests(unittest.TestCase):
         filtered = dependencies.split('if "$legacy_private_gtk"; then', 1)[1].split("fi", 1)[0]
         self.assertIn("libgtk-4-dev", filtered)
 
+    def test_modern_deb_provisioning_supplies_mutters_udev_module(self):
+        provision = (ROOT / "scripts/provision-deb-container.sh").read_text()
+        self.assertIn("systemd-dev", provision)
+
     def test_private_deb_addons_do_not_require_missing_host_glycin_or_hyprcursor(self):
         dependencies = (ROOT / "scripts/build-deps.sh").read_text()
         filtered = dependencies.split('if "$private_deb_addons"; then', 1)[1].split("fi", 1)[0]

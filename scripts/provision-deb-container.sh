@@ -37,11 +37,9 @@ apt-get install -y --no-install-recommends "${rust_packages[@]}" \
     python3-venv python3-jinja2 clang llvm cbindgen libreadline-dev zip zlib1g-dev valac \
     libheif-dev libjxl-dev libfontconfig-dev libevdev-dev hwdata libzip-dev libtomlplusplus-dev \
     bubblewrap dpkg-dev fakeroot patchelf curl ca-certificates foot \
-    dbus-x11 xauth python3-gi-cairo gir1.2-accountsservice-1.0 gir1.2-upowerglib-1.0
+    dbus-x11 xauth python3-gi-cairo gir1.2-accountsservice-1.0 gir1.2-upowerglib-1.0 systemd-dev
 if [ "$ID:$VERSION_ID" = ubuntu:26.04 ]; then
-    # Mutter requires the generic udev pkg-config module. On Ubuntu 26.04
-    # libudev-dev exports libudev.pc, while systemd-dev exports udev.pc.
-    apt-get install -y --no-install-recommends hyprcursor-util systemd-dev
+    apt-get install -y --no-install-recommends hyprcursor-util
 fi
 python3 -m venv --system-site-packages /opt/gnoblin-build-tools
 /opt/gnoblin-build-tools/bin/pip install meson==1.10.1
