@@ -53,6 +53,7 @@ class OpenSUSELeapWorkflowTests(unittest.TestCase):
             self.assertIn("opensuse-leap:15.5 | opensuse-leap:15.6", script)
         self.assertIn("libexpat-devel libxml2-devel", provision)
         self.assertEqual(provision.count("libpng16-devel"), 2)
+        self.assertEqual(provision.count("libjpeg8-devel"), 2)
         self.assertIn("install --allow-downgrade --no-recommends", provision)
         self.assertIn("useradd --create-home --user-group", provision)
         self.assertIn("ln -s libpng16.pc /usr/lib64/pkgconfig/libpng.pc", provision)
