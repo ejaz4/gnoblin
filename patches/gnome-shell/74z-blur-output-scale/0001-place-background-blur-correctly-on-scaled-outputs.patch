@@ -28,7 +28,7 @@ index f7bba4e96..ae7d64b13 100644
 @@ -634,6 +634,9 @@ update_actor_box (ShellBlurEffect     *self,
            height = (self->paint_box.y2 - self->paint_box.y1) * sy;
          }
- 
+
 +      float bounds_width = 0, bounds_height = 0;
 +      gboolean clip_to_bounds = FALSE;
 +
@@ -36,7 +36,7 @@ index f7bba4e96..ae7d64b13 100644
          {
            MtkRectangle stage_view_layout;
 @@ -643,7 +646,38 @@ update_actor_box (ShellBlurEffect     *self,
- 
+
            origin_x -= stage_view_layout.x;
            origin_y -= stage_view_layout.y;
 -          /* Keep framebuffer reads inside this view, retaining the matching
@@ -96,7 +96,7 @@ index f7bba4e96..ae7d64b13 100644
 -           * with stage-view scaling though.
 -           */
 -        }
- 
+
        clutter_actor_box_set_origin (source_actor_box, origin_x, origin_y);
        clutter_actor_box_set_size (source_actor_box, width, height);
 @@ -985,8 +1013,18 @@ paint_actor_mask (ShellBlurEffect *self,
@@ -118,6 +118,6 @@ index f7bba4e96..ae7d64b13 100644
        /* Keep client coverage at output resolution. Downsampling expands corners. */
        transform_node = clutter_transform_node_new (&transform);
        clutter_paint_node_add_child (layer_node, transform_node);
--- 
+--
 2.55.0
 
