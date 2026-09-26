@@ -54,6 +54,8 @@ jobs:
       matrix:
         version: ["8", "9", "10"]
     steps:
+      - name: Install Git for the source checkout
+        run: dnf -y install git
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.sha }}
