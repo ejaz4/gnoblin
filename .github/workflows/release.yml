@@ -195,7 +195,12 @@ jobs:
           )
           ((${#rpms[@]} > 0))
           for rpm in "${rpms[@]}"; do
-            cp -- "$rpm" "release-assets/el-$(basename "$rpm")"
+            artifact="${rpm#el-rpms/}"
+            target="${artifact%%/*}"
+            version="${target#el-}"
+            version="${version%-rpms}"
+            [[ "$version" =~ ^(8|9|10)$ ]]
+            cp -- "$rpm" "release-assets/el-${version}-$(basename "$rpm")"
           done
       - uses: actions/download-artifact@v4
         with:
@@ -210,7 +215,12 @@ jobs:
           )
           ((${#rpms[@]} > 0))
           for rpm in "${rpms[@]}"; do
-            cp -- "$rpm" "release-assets/opensuse-leap-$(basename "$rpm")"
+            artifact="${rpm#opensuse-leap-rpms/}"
+            target="${artifact%%/*}"
+            version="${target#opensuse-leap-}"
+            version="${version%-rpms}"
+            [[ "$version" =~ ^(15\.6|16\.0)$ ]]
+            cp -- "$rpm" "release-assets/opensuse-leap-${version}-$(basename "$rpm")"
           done
       - name: Add stable Arch package download name
         run: |

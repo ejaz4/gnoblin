@@ -160,9 +160,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertIn(f"uses: ./.github/workflows/{reusable}", workflow)
             self.assertIn(f"      - {job}\n", release_gate)
         self.assertIn("pattern: el-*-rpms", workflow)
-        self.assertIn('"release-assets/el-$(basename "$rpm")"', workflow)
+        self.assertIn('"release-assets/el-${version}-$(basename "$rpm")"', workflow)
         self.assertIn("pattern: opensuse-leap-*-rpms", workflow)
-        self.assertIn('"release-assets/opensuse-leap-$(basename "$rpm")"', workflow)
+        self.assertIn('"release-assets/opensuse-leap-${version}-$(basename "$rpm")"', workflow)
 
     def test_release_builds_the_pinned_nixos_package_before_publication(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()

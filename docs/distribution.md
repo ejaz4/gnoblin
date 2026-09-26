@@ -102,9 +102,17 @@ git tag -s gnoblin-v0.1.0 -m "Gnoblin 0.1.0 (GNOME 51.0)"
 git push origin gnoblin-v0.1.0
 ```
 
-The release workflow builds source archives, source RPMs, Debian/Ubuntu binary
-packages and checksums. All three Debian/Ubuntu build and install tests must
-pass before assets are published.
+The release workflow builds source archives, Fedora source RPMs, Debian and
+Ubuntu binary packages, an Arch package, Enterprise Linux RPMs, openSUSE RPMs,
+the pinned NixOS package and checksums.
+
+It runs each target's package build, installation, GNOME coexistence and
+removal gates before assembling release assets. The GitHub release stays a
+draft until COPR and the signed APT archive have both updated successfully.
+
+RPM release assets identify their target in the filename: `el-8-*`, `el-9-*`,
+`el-10-*`, `opensuse-leap-15.6-*`, `opensuse-leap-16.0-*`, and
+`opensuse-tumbleweed-*`. Install only the set matching the host distribution.
 
 Asset names and package metadata include both versions. For example, a
 Debian package is versioned `51.0+gnoblin0.1.0-1~debian13`. Dependency sources

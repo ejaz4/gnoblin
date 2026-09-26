@@ -1,18 +1,17 @@
 # openSUSE Tumbleweed
 
-The release workflow now builds the Tumbleweed RPM set and is configured to
-attach it to new GitHub releases. Older releases do not contain these RPMs.
-The packages install beside stock GNOME. Tumbleweed has package build,
-co-installation and removal checks, but has not passed a real graphical login
-check. Keep a working session available while testing. See
-[platform support](platform-support.md).
+The release workflow is configured to attach Tumbleweed RPMs to new GitHub
+releases. Older releases do not contain them. The packages install beside
+stock GNOME. Tumbleweed has passed package build, co-installation and removal
+checks, but has not passed a graphical login check. Keep a working session
+available while testing. See [platform support](platform-support.md).
 
 ## Install
 
 Download all Tumbleweed RPM assets from the
 [latest Gnoblin release](https://github.com/kierandrewett/gnoblin/releases),
-once it includes files named `opensuse-tumbleweed-*.rpm`. Install the complete set
-together. With GitHub CLI:
+once it includes files named `opensuse-tumbleweed-*.rpm`. Install the complete
+set together. With GitHub CLI:
 
 ```sh
 mkdir -p gnoblin-rpms
