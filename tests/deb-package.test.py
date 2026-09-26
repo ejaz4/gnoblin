@@ -79,6 +79,7 @@ class PackageLayoutTests(unittest.TestCase):
             librsvg["sha256"],
             "407cbbab518137ea18a3f3220bea180fbee75f3e5bd6ba10a7a862c1a6f74d82",
         )
+        self.assertEqual(librsvg["build_system"], "autotools")
         self.assertIn("librsvg-2.0.pc", librsvg["private_pkgconfig"])
 
     def test_legacy_compatibility_runtime_uses_modern_cbindgen(self):
