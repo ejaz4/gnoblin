@@ -53,6 +53,12 @@ class OpenSUSELeapWorkflowTests(unittest.TestCase):
             self.assertIn("opensuse-leap:15.5 | opensuse-leap:15.6", script)
         self.assertIn("libexpat-devel libxml2-devel", provision)
 
+    def test_bootstrap_installs_checkout_tools_before_actions_checkout(self):
+        workflow = (ROOT / ".github/workflows/rpm-compat-bootstrap.yml").read_text()
+        self.assertLess(workflow.index("- name: Install checkout tools"), workflow.index("- uses: actions/checkout@v4"))
+        self.assertIn("zypper --non-interactive install --no-recommends git tar", workflow)
+        self.assertIn("dnf -qy install git tar", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

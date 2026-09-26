@@ -44,6 +44,26 @@ jobs:
             image: registry.opensuse.org/opensuse/leap:16.0
     container: ${{ matrix.image }}
     steps:
+      - name: Install checkout tools
+        run: |
+          source /etc/os-release
+          case "$ID" in
+            opensuse-leap)
+              for attempt in 1 2 3; do
+                if zypper --non-interactive --gpg-auto-import-keys refresh --force; then
+                  break
+                fi
+                if [ "$attempt" -eq 3 ]; then
+                  exit 1
+                fi
+                sleep "$((attempt * 15))"
+              done
+              zypper --non-interactive install --no-recommends git tar
+              ;;
+            *)
+              dnf -qy install git tar
+              ;;
+          esac
       - uses: actions/checkout@v4
       - name: Provision build image
         run: packaging/rpm/provision-compat-container.sh
