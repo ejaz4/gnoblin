@@ -51,7 +51,10 @@ destination = pathlib.Path(sys.argv[3]) / f"gjs-{version}.tar.xz"
 if not destination.exists():
     temporary = destination.with_suffix(destination.suffix + ".part")
     with urllib.request.urlopen(recipe["url"], timeout=60) as source, temporary.open("wb") as target:
-        while chunk := source.read(1024 * 1024):
+        while True:
+            chunk = source.read(1024 * 1024)
+            if not chunk:
+                break
             target.write(chunk)
     temporary.replace(destination)
 digest = hashlib.sha256(destination.read_bytes()).hexdigest()

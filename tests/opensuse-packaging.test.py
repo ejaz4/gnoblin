@@ -97,7 +97,11 @@ class OpenSUSEPackagingTests(unittest.TestCase):
         )
         self.assertIn("--allow-unsigned-rpm", chain)
         self.assertLess(
-            chain.index("\nbuild_compatibility_runtime\n"),
+            chain.index("\n    build_compatibility_runtime\n"),
+            chain.index('"$ROOT/scripts/make-tarball.sh"'),
+        )
+        self.assertLess(
+            chain.index("\n    build_compatibility_runtime\n"),
             chain.index("build gsettings-desktop-schemas.spec"),
         )
         self.assertIn("build compat-runtime.spec", chain)

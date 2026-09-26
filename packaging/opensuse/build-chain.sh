@@ -13,14 +13,6 @@ compatibility_runtime=${GNOBLIN_COMPAT_RUNTIME:-0}
 
 mkdir -p "$SOURCES" "$BUILDROOT"
 
-if [[ $compatibility_runtime != 1 ]]; then
-    "$ROOT/packaging/opensuse/check-buildrequires.sh" --install
-fi
-gnoblin_retry_command git -C "$ROOT" submodule foreach --recursive 'git fetch --force --tags origin'
-for project in gsettings-desktop-schemas mutter gnome-shell; do
-    "$ROOT/scripts/make-tarball.sh" "$project" "$SOURCES"
-done
-
 build() {
     local spec="$1"
     shift
@@ -54,10 +46,25 @@ build_compatibility_runtime() {
     install_output "${compat_rpms[@]}"
 }
 
-build_compatibility_runtime
 if [[ $compatibility_runtime == 1 ]]; then
+    # Legacy targets need the private Python and hyprcursor utility while
+    # staging source archives, before the RPM specs can consume that runtime.
+    build_compatibility_runtime
+    if [[ -x /opt/gnoblin-rpm-compat-tools/bin/python ]]; then
+        PATH="/opt/gnoblin-rpm-compat-tools/bin:$PATH"
+    fi
+    PATH="/usr/lib/gnoblin/deps/bin:$PATH"
+    export PATH
+    command -v hyprcursor-util >/dev/null
     "$ROOT/packaging/opensuse/check-buildrequires.sh" --install --compat-runtime
+else
+    "$ROOT/packaging/opensuse/check-buildrequires.sh" --install
 fi
+
+gnoblin_retry_command git -C "$ROOT" submodule foreach --recursive 'git fetch --force --tags origin'
+for project in gsettings-desktop-schemas mutter gnome-shell; do
+    "$ROOT/scripts/make-tarball.sh" "$project" "$SOURCES"
+done
 compat_args=()
 if [[ $compatibility_runtime == 1 ]]; then
     compat_args=(--with gnoblin_compat_runtime)
