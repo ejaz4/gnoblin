@@ -14,7 +14,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "group: ${{ github.workflow }}-${{ inputs.ref || github.ref }}",
             workflow,
         )
-        self.assertIn("cancel-in-progress: true", workflow)
+        self.assertIn("cancel-in-progress: false", workflow)
 
     def test_debian_packages_build_on_pushes_prs_and_exact_release_refs(self):
         workflow = (ROOT / ".github/workflows/deb.yml").read_text()
