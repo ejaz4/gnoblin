@@ -12,10 +12,21 @@ PREFIX=/usr/lib/gnoblin/deps
 MANIFEST="$ROOT/build/rpm-compat-runtime.json"
 source /etc/os-release
 python=python3
-if [[ "${ID}:${VERSION_ID}" == opensuse-leap:15.6 ]]; then
-    python=/opt/gnoblin-rpm-compat-tools/bin/python
-    export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
-fi
+case "${ID}:${VERSION_ID}" in
+    rocky:8 | rocky:8.* | rhel:8 | rhel:8.* | almalinux:8 | almalinux:8.*)
+        # EL 8's platform Python is too old for the pinned build tooling.
+        python=python3.9
+        export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
+        ;;
+    rocky:9 | rocky:9.* | rhel:9 | rhel:9.* | almalinux:9 | almalinux:9.* | \
+        rocky:10 | rocky:10.* | rhel:10 | rhel:10.* | almalinux:10 | almalinux:10.*)
+        export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
+        ;;
+    opensuse-leap:15.6)
+        python=/opt/gnoblin-rpm-compat-tools/bin/python
+        export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
+        ;;
+esac
 
 if [[ ! -w /usr/lib/gnoblin ]]; then
     echo "The private Gnoblin prefix must be owned by the build user." >&2
