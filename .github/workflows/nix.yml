@@ -113,7 +113,7 @@ jobs:
           test -f result/share/wayland-sessions/gnoblin.desktop
           session_executable="$(sed -n 's/^Exec=//p' result/share/wayland-sessions/gnoblin.desktop)"
           test -x "$session_executable"
-          nix path-info --json result | tee "$RUNNER_TEMP/nix-release-path.json"
+          nix path-info --json ./result | tee "$RUNNER_TEMP/nix-release-path.json"
       - name: Verify declarative install, GNOME coexistence, and removal
         run: |
           lifecycle=".#lib.nixChannelLifecycles.x86_64-linux.nixos_26_05"
@@ -165,7 +165,7 @@ jobs:
           test ! -e result/bin/mutter
           session_executable="$(sed -n 's/^Exec=//p' result/share/wayland-sessions/gnoblin.desktop)"
           test -x "$session_executable"
-          nix path-info --json result | tee "$RUNNER_TEMP/nixos-25-stable-private-runtime.json"
+          nix path-info --json ./result | tee "$RUNNER_TEMP/nixos-25-stable-private-runtime.json"
       - name: Verify declarative install, GNOME coexistence, and removal
         run: |
           for release in 25_05 25_11; do

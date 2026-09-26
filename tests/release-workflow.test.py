@@ -181,6 +181,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertNotIn("release-nixos-26-05:", nix)
 
+    def test_nixos_release_metadata_uses_a_store_path_not_a_flake_reference(self):
+        workflow = (ROOT / ".github/workflows/nix.yml").read_text()
+        self.assertEqual(workflow.count("nix path-info --json ./result | tee"), 2)
+        self.assertNotIn("nix path-info --json result | tee", workflow)
+
     def test_copr_release_job_publishes_and_installs_the_tagged_source_rpms(self):
         workflow = (ROOT / ".github/workflows/copr.yml").read_text()
         publisher = (ROOT / "scripts/publish-copr.sh").read_text()
