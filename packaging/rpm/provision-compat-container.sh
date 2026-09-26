@@ -23,7 +23,7 @@ case "${ID}:${VERSION_ID}" in
         dnf -qy install \
             gcc gcc-c++ make pkgconf-pkg-config python3 python3-devel python3-pip \
             python3-setuptools flex bison gettext libffi-devel pcre2-devel zlib-devel \
-            libmount-devel libselinux-devel tar xz patch git
+            libmount-devel libselinux-devel libexpat-devel tar xz patch git
         python3 -m venv /opt/gnoblin-rpm-compat-tools
         /opt/gnoblin-rpm-compat-tools/bin/pip install --disable-pip-version-check --quiet setuptools meson==1.10.1 ninja
         ;;
@@ -36,8 +36,8 @@ case "${ID}:${VERSION_ID}" in
     opensuse-leap:15.6)
         zypper --non-interactive --quiet install --no-recommends \
             gcc gcc-c++ make pkg-config python3-devel flex bison gettext-tools \
-            libffi-devel pcre2-devel zlib-devel libmount-devel libselinux-devel \
-            libopenssl-devel sqlite3-devel xz-devel bzip2-devel tar gzip xz patch git curl
+            libffi-devel pcre2-devel zlib-devel libmount-devel libselinux-devel libexpat-devel \
+            libopenssl-devel sqlite3-devel xz-devel libbz2-devel tar gzip xz patch git curl
         python_archive=/tmp/Python-3.9.20.tgz
         curl --fail --location --silent --show-error \
             --output "$python_archive" https://www.python.org/ftp/python/3.9.20/Python-3.9.20.tgz
