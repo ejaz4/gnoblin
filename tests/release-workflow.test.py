@@ -8,6 +8,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleaseWorkflowTests(unittest.TestCase):
+    def test_deb_matrix_supersedes_stale_runs_for_the_same_ref(self):
+        workflow = (ROOT / ".github/workflows/deb.yml").read_text()
+        self.assertIn(
+            "group: ${{ github.workflow }}-${{ inputs.ref || github.ref }}",
+            workflow,
+        )
+        self.assertIn("cancel-in-progress: true", workflow)
+
     def test_debian_packages_build_on_pushes_prs_and_exact_release_refs(self):
         workflow = (ROOT / ".github/workflows/deb.yml").read_text()
         build = workflow.split("\n  build:\n", 1)[1].split("\n  install:\n", 1)[0]

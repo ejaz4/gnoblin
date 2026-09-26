@@ -17,6 +17,10 @@ on:
         default: main
         required: true
 
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
