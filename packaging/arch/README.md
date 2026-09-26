@@ -6,7 +6,20 @@ It never replaces, provides, or conflicts with Arch's `mutter` or
 `gnome-shell` packages. The only files outside that prefix are Gnoblin's login
 entry, `gnoblinctl`, and its `org.gnoblin.*` systemd user units.
 
-## Release source and integrity
+## Published package
+
+When a published GitHub release contains an Arch package, use its
+`gnoblin-arch-x86_64.pkg.tar.zst` asset for a normal installation. `pacman -U`
+installs its runtime dependencies from Arch's configured repositories; it does
+not install the compiler, Inkscape, or the other build dependencies in this
+file.
+
+The release workflow builds that package in a clean Arch container, installs it
+alongside Arch's stock GNOME packages, then removes it and checks that GNOME's
+files and package versions are unchanged. The workflow attaches only its main
+`gnoblin` package to the release, not the debug split package.
+
+## Source recipe and integrity
 
 Each release publishes these paired assets:
 
@@ -20,8 +33,9 @@ present on the machine running `makepkg`. It also contains the prebuilt
 Adwaita Hyprcursor theme, so installing the package does not require Inkscape;
 Inkscape is used only by the release builder to create that theme.
 
-The release PKGBUILD contains the source archive SHA-256. Download the two
-assets from the same release, place `PKGBUILD` beside the archive, then run:
+The release PKGBUILD contains the source archive SHA-256. It is for people
+building Gnoblin themselves. Download the two assets from the same release,
+place `PKGBUILD` beside the archive, then run:
 
 ```bash
 makepkg -si

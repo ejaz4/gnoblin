@@ -33,6 +33,7 @@ export default defineConfig({
                             { text: "Choose your system", link: "/installation" },
                             { text: "Fedora", link: "/install-fedora" },
                             { text: "Debian / Ubuntu", link: "/install-debian" },
+                            { text: "Arch / CachyOS", link: "/install-arch" },
                             { text: "NixOS", link: "/install-nixos" },
                             { text: "Build from source", link: "/install-source" },
                         ],
