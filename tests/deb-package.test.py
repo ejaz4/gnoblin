@@ -65,6 +65,7 @@ class PackageLayoutTests(unittest.TestCase):
             "445ed8208a6e4823de1226a74ca319d3600e83f6369f99b14265006599c32ccb",
         )
         self.assertIn("cairo.pc", cairo["private_pkgconfig"])
+        self.assertIn("-Dxlib=enabled", cairo["options"])
         compatibility = (ROOT / "scripts/build-deb-compat-runtime.sh").read_text()
         self.assertIn('recipe["requires"] = ["cairo", "librsvg"]', compatibility)
 

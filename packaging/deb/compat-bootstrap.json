@@ -71,7 +71,7 @@
       "-Dspectre=disabled",
       "-Dsymbol-lookup=disabled",
       "-Dxcb=disabled",
-      "-Dxlib=disabled"
+      "-Dxlib=enabled"
     ]
   },
   {
