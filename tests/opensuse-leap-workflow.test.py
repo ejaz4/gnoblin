@@ -54,6 +54,8 @@ class OpenSUSELeapWorkflowTests(unittest.TestCase):
         self.assertIn("libexpat-devel libxml2-devel", provision)
         self.assertEqual(provision.count("libpng16-devel"), 2)
         self.assertEqual(provision.count("libjpeg8-devel"), 2)
+        for package in ("fontconfig-devel", "freetype2-devel", "libX11-devel"):
+            self.assertEqual(provision.count(package), 2)
         self.assertIn("install --allow-downgrade --no-recommends", provision)
         self.assertIn("useradd --create-home --user-group", provision)
         self.assertIn("ln -s libpng16.pc /usr/lib64/pkgconfig/libpng.pc", provision)
