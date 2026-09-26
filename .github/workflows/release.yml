@@ -219,7 +219,7 @@ jobs:
             target="${artifact%%/*}"
             version="${target#opensuse-leap-}"
             version="${version%-rpms}"
-            [[ "$version" =~ ^(15\.6|16\.0)$ ]]
+            [[ "$version" =~ ^(15\.5|15\.6|16\.0)$ ]]
             cp -- "$rpm" "release-assets/opensuse-leap-${version}-$(basename "$rpm")"
           done
       - name: Add stable Arch package download name

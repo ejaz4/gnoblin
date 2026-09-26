@@ -36,6 +36,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - version: "15.5"
+            artifact: opensuse-leap-15.5-rpms
           - version: "15.6"
             artifact: opensuse-leap-15.6-rpms
           - version: "16.0"
@@ -107,6 +109,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - version: "15.5"
+            artifact: opensuse-leap-15.5-rpms
           - version: "15.6"
             artifact: opensuse-leap-15.6-rpms
           - version: "16.0"

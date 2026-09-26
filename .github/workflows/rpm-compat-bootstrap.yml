@@ -38,6 +38,8 @@ jobs:
             image: quay.io/rockylinux/rockylinux:9
           - target: rocky-10
             image: quay.io/rockylinux/rockylinux:10
+          - target: opensuse-leap-15.5
+            image: registry.opensuse.org/opensuse/leap:15.5
           - target: opensuse-leap-16.0
             image: registry.opensuse.org/opensuse/leap:16.0
     container: ${{ matrix.image }}

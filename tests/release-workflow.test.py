@@ -162,6 +162,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("pattern: el-*-rpms", workflow)
         self.assertIn('"release-assets/el-${version}-$(basename "$rpm")"', workflow)
         self.assertIn("pattern: opensuse-leap-*-rpms", workflow)
+        self.assertIn("^(15\\.5|15\\.6|16\\.0)$", workflow)
         self.assertIn('"release-assets/opensuse-leap-${version}-$(basename "$rpm")"', workflow)
 
     def test_release_builds_the_pinned_nixos_package_before_publication(self):

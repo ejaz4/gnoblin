@@ -18,10 +18,14 @@ case "${ID}:${VERSION_ID}" in
         rocky:10 | rocky:10.* | rhel:10 | rhel:10.* | almalinux:10 | almalinux:10.*)
         export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
         ;;
+    opensuse-leap:15.5 | opensuse-leap:15.6)
+        python=/opt/gnoblin-rpm-compat-tools/bin/python
+        export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
+        ;;
     opensuse-leap:16.0)
         ;;
     *)
-        echo "The private GLib/GI bootstrap gate currently supports EL 8/9/10 and openSUSE Leap 16.0 only; got ${ID}:${VERSION_ID}." >&2
+        echo "The private GLib/GI bootstrap gate currently supports EL 8/9/10 and openSUSE Leap 15.5, 15.6, and 16.0; got ${ID}:${VERSION_ID}." >&2
         exit 2
         ;;
 esac

@@ -22,7 +22,7 @@ case "${ID}:${VERSION_ID}" in
         rocky:10 | rocky:10.* | rhel:10 | rhel:10.* | almalinux:10 | almalinux:10.*)
         export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
         ;;
-    opensuse-leap:15.6)
+    opensuse-leap:15.5 | opensuse-leap:15.6)
         python=/opt/gnoblin-rpm-compat-tools/bin/python
         export PATH="/opt/gnoblin-rpm-compat-tools/bin:${PATH}"
         ;;

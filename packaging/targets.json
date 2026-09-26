@@ -307,9 +307,9 @@
       "image": "registry.opensuse.org/opensuse/leap:15.5",
       "lifecycle": "upstream-eol",
       "adapter": "rpm-opensuse",
-      "status": "probe-needed",
+      "status": "existing-path",
       "support": "unsupported",
-      "ci": [],
+      "ci": [".github/workflows/opensuse-leap.yml"],
       "gates": {
         "dependency-probe": false,
         "package-build": false,

@@ -31,12 +31,12 @@ case "${ID}:${VERSION_ID}" in
         zypper --non-interactive --quiet install --no-recommends \
             gcc gcc-c++ make meson ninja pkgconf-pkg-config python3 python3-devel \
             python3-setuptools flex bison gettext-tools libffi-devel pcre2-devel zlib-devel \
-            libmount-devel libselinux-devel tar xz patch git
+            libmount-devel libselinux-devel libexpat-devel libxml2-devel tar xz patch git
         ;;
-    opensuse-leap:15.6)
+    opensuse-leap:15.5 | opensuse-leap:15.6)
         zypper --non-interactive --quiet install --no-recommends \
             gcc gcc-c++ make pkg-config python3-devel flex bison gettext-tools \
-            libffi-devel pcre2-devel zlib-devel libmount-devel libselinux-devel libexpat-devel \
+            libffi-devel pcre2-devel zlib-devel libmount-devel libselinux-devel libexpat-devel libxml2-devel \
             libopenssl-devel sqlite3-devel xz-devel libbz2-devel tar gzip xz patch git curl
         python_archive=/tmp/Python-3.9.20.tgz
         curl --fail --location --silent --show-error \
@@ -48,7 +48,7 @@ case "${ID}:${VERSION_ID}" in
         /opt/gnoblin-rpm-compat-tools/bin/pip install --disable-pip-version-check --quiet setuptools meson==1.10.1 ninja
         ;;
     *)
-        echo "The private GLib/GI bootstrap gate currently supports EL 8/9/10 and openSUSE Leap 16.0 only; got ${ID}:${VERSION_ID}." >&2
+        echo "The private GLib/GI bootstrap gate currently supports EL 8/9/10 and openSUSE Leap 15.5, 15.6, and 16.0; got ${ID}:${VERSION_ID}." >&2
         exit 2
         ;;
 esac
