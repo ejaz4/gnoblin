@@ -545,6 +545,12 @@ gnome-layer-animation-verify:
 [private]
 gnome-window-effects-verify:
     GNOBLIN_CONFIG='' GNOBLIN_PREFIX="{{prefix}}" GNOBLIN_TEST_DBUS_CLIENT="{{justfile_directory()}}/tests/test-window-effects.py" ./scripts/run-gnome-shell.sh
+    just gnome-window-effects-scaled-verify 1.5
+    just gnome-window-effects-scaled-verify 2
+
+[private]
+gnome-window-effects-scaled-verify SCALE:
+    GNOBLIN_CONFIG='' GNOBLIN_PREFIX="{{prefix}}" GNOBLIN_BLUR_TEST_SCALE="{{SCALE}}" GNOBLIN_BLUR_TEST_CORNERS=1 GNOBLIN_BLUR_TEST_SHADOWS=1 GNOBLIN_TEST_DISABLE_NOTIFICATIONS=1 GNOBLIN_TEST_SCRIPT_ROOT="{{justfile_directory()}}/tests/fixtures" GNOBLIN_TEST_MDK=1 MONITOR=2880x1920 GNOBLIN_TEST_DBUS_CLIENT="{{justfile_directory()}}/tests/test-window-effects.py" ./scripts/run-gnome-shell.sh
 
 # Build a source RPM from an already prepared release source directory.
 [private]
