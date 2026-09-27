@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import traceback
+from collections.abc import Callable
 
 import gi
 
@@ -27,12 +28,17 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = Path(__file__).resolve()
 sys.path.insert(0, str(ROOT / "tests"))
 from gnoblin_test_session import (  # noqa: E402
+    FRAME_ACTION_CLOSE,
     application_window_candidates,
     compile_minimal_testing_shell,
+    constrain_move_to_monitor,
     eval_shell,
+    frame_button_center,
+    gnoblin_frame_visible,
     send_pointer,
     shell_windows,
     wait_for,
+    wait_for_settled_close_target,
     window_by_sequence_expression,
 )
 
@@ -44,6 +50,9 @@ FATAL_LOG = re.compile(
     re.IGNORECASE,
 )
 FRAME_POLICY = [3, 0, 0, 0, 0, 36, 2, 2, 2]
+FLATPAK_LAVAPIPE_ICD = "/usr/lib/x86_64-linux-gnu/GL/vulkan/icd.d/lvp_icd.x86_64.json"
+APP_WINDOW_STABLE_SECONDS = 4.0
+APP_WINDOW_SETTLE_TIMEOUT_SECONDS = 15.0
 
 
 def save_json(path: Path, value: object) -> None:
@@ -55,6 +64,57 @@ def default_artifact_dir(index: int) -> Path:
     state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return state_home / "gnoblin" / "app-e2e" / f"{stamp}-shard-{index:02d}"
+
+
+def wait_for_stable_application_windows(
+    get_windows, stable_for: float, timeout: float
+) -> tuple[list[dict], bool, float]:
+    """Wait for splash-to-main-window changes to finish before controlling clients."""
+    started = time.monotonic()
+    last_signature = None
+    stable_since = None
+    latest_windows: list[dict] = []
+
+    def stable_windows() -> list[dict] | None:
+        nonlocal last_signature, stable_since, latest_windows
+        current = get_windows()
+        now = time.monotonic()
+        latest_windows = current
+        signature = tuple(
+            tuple(
+                window.get(key)
+                for key in (
+                    "sequence",
+                    "pid",
+                    "title",
+                    "type",
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                    "ready",
+                    "mapped",
+                    "minimized",
+                    "fullscreen",
+                    "maximized",
+                )
+            )
+            for window in current
+        )
+        if current and signature == last_signature:
+            if stable_since is not None and now - stable_since >= stable_for:
+                return current
+        else:
+            last_signature = signature if current else None
+            stable_since = now if current else None
+        return None
+
+    try:
+        windows = wait_for(stable_windows, f"stable app windows for {stable_for:.1f}s", timeout=timeout)
+        assert isinstance(windows, list)
+        return windows, True, round(time.monotonic() - started, 3)
+    except TimeoutError:
+        return latest_windows, False, round(time.monotonic() - started, 3)
 
 
 def run_parent() -> int:
@@ -86,9 +146,10 @@ def run_parent() -> int:
     if shard.get("shard") != {"index": index, "count": count} or not shard.get("apps"):
         raise RuntimeError(f"invalid or empty catalog shard {index}/{count}")
     apps = shard["apps"]
+    session_probe_only = os.environ.get("GNOBLIN_E2E_SESSION_PROBE_ONLY", "0").lower() in {"1", "true", "yes"}
     run_info = {
         "shard": shard["shard"],
-        "app_count": len(apps),
+        "app_count": 0 if session_probe_only else len(apps),
         "git_head": subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True
         ).stdout.strip(),
@@ -97,6 +158,8 @@ def run_parent() -> int:
         "catalog_generated_utc": catalog["generated_utc"],
         "fedora_appstream_sha256": catalog.get("fedora_appstream_sha256"),
         "extra_monitor": os.environ.get("GNOBLIN_E2E_EXTRA_MONITOR") or None,
+        "software_vulkan_icd": os.environ.get("GNOBLIN_E2E_VULKAN_ICD"),
+        "private_pipewire": os.environ.get("GNOBLIN_TEST_PIPEWIRE") == "1",
     }
     save_json(artifact_dir / "run.json", run_info)
 
@@ -124,7 +187,8 @@ def run_parent() -> int:
     if os.environ.get("GNOBLIN_E2E_EXTRA_MONITOR"):
         env["EXTRA_MONITOR"] = os.environ["GNOBLIN_E2E_EXTRA_MONITOR"]
     timeout = int(os.environ.get("GNOBLIN_E2E_TIMEOUT", "7200"))
-    print(f"Gnoblin app E2E: shard={index}/{count}, apps={len(apps)}", flush=True)
+    suite_name = "Gnoblin IBus session probe" if session_probe_only else "Gnoblin app E2E"
+    print(f"{suite_name}: shard={index}/{count}, apps={0 if session_probe_only else len(apps)}", flush=True)
     print(f"Artifacts: {artifact_dir}", flush=True)
 
     log_path = artifact_dir / "runner.log"
@@ -202,17 +266,80 @@ def window_state(sequence: int) -> dict | None:
     expression = window_expression(sequence)
     return eval_shell(
         f"(()=>{{const w={expression};if(!w)return null;const r=w.get_frame_rect();"
-        f"const a=global.get_window_actors().find(a=>a.meta_window===w);"
+        "const m=global.display.get_monitor_geometry(w.get_monitor());"
+        "const monitors=Array.from({length:global.display.get_n_monitors()},(_,i)=>{"
+        "const r=global.display.get_monitor_geometry(i);return {index:i,x:r.x,y:r.y,width:r.width,height:r.height};});"
+        f"const a=global.get_window_actors().find(a=>a.meta_window===w),f=a?.get_children()"
+        ".find(c=>c.get_name()==='gnoblin-native-frame'),p=f?.get_transformed_position();"
         "return {sequence:w.get_stable_sequence(),title:w.get_title(),pid:w.get_pid(),"
         "type:w.get_window_type(),x:r.x,y:r.y,width:r.width,height:r.height,"
-        "monitor:w.get_monitor(),"
+        "frame_actor_position:p?[Math.round(p[0]),Math.round(p[1])]:null,"
+        "monitor:w.get_monitor(),monitor_rect:{x:m.x,y:m.y,width:m.width,height:m.height},monitors,"
         "ready:w.is_ready(),mapped:a?.is_mapped()??false,"
         "minimized:w.minimized,fullscreen:w.fullscreen,"
         "maximized:!!w.get_maximize_flags(),"
         "can_move:w.allows_move(),can_resize:w.allows_resize(),"
         "can_maximize:w.can_maximize(),can_minimize:w.can_minimize(),"
+        "can_close:typeof w.can_close==='function'?w.can_close():null,"
+        "min_size:typeof w.get_min_size==='function'?w.get_min_size():null,"
+        "max_size:typeof w.get_max_size==='function'?w.get_max_size():null,"
         "focused:global.display.focus_window===w,"
         "layout:imports.gi.Meta.gnoblin_window_frame_get(w).recursiveUnpack()};})()"
+    )
+
+
+def window_evidence(state: dict | None) -> dict | None:
+    """Keep failed-operation traces useful without duplicating full layout state."""
+    if state is None:
+        return None
+    layout = state.get("layout") or {}
+    return {
+        key: state.get(key)
+        for key in (
+            "x",
+            "y",
+            "width",
+            "height",
+            "frame_actor_position",
+            "monitor",
+            "monitor_rect",
+            "monitors",
+            "can_move",
+            "can_resize",
+            "can_close",
+            "min_size",
+            "max_size",
+            "maximized",
+            "fullscreen",
+        )
+    } | {
+        "frame_border": layout.get("border"),
+        "frame_native": layout.get("native"),
+        "frame_supported": layout.get("supported"),
+        "frame_mode": layout.get("mode"),
+        "frame_presentation": layout.get("presentation"),
+    }
+
+
+def capture_window_evidence(sequence: int) -> dict | None:
+    try:
+        return window_evidence(window_state(sequence))
+    except Exception as error:
+        return {"observation_error": str(error)}
+
+
+def request_is_below_minimum(request: dict[str, object] | None, state: dict | None) -> bool:
+    if request is None or state is None:
+        return False
+    rect = request.get("frame_rect")
+    hint = state.get("min_size")
+    return (
+        isinstance(rect, list)
+        and len(rect) == 4
+        and isinstance(hint, list)
+        and len(hint) == 3
+        and hint[0] is True
+        and (rect[2] < hint[1] or rect[3] < hint[2])
     )
 
 
@@ -229,10 +356,11 @@ def write_event(path: Path, event: dict) -> None:
         stream.write(json.dumps(event, sort_keys=True) + "\n")
 
 
-def screenshot(app: dict, directory: Path) -> str | None:
+def screenshot(app: dict, directory: Path, suffix: str | None = None) -> str | None:
     directory.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(app["app_id"].encode()).hexdigest()[:12]
-    path = directory / f"{app['source']}-{digest}.png"
+    name_suffix = f"-{suffix}" if suffix else ""
+    path = directory / f"{app['source']}-{digest}{name_suffix}.png"
     result = subprocess.run(
         [
             "gdbus",
@@ -274,18 +402,169 @@ def shell_drag(start_x: int, start_y: int, end_x: int, end_y: int) -> None:
 
 def app_command(app: dict, client_environment: dict[str, str]) -> list[str]:
     if app["source"] == "flathub-popular":
-        return [
+        command = [
             "flatpak",
             "run",
             f"--env=DISPLAY={client_environment['DISPLAY']}",
             f"--env=LANG={client_environment['LANG']}",
             "--env=LIBGL_ALWAYS_SOFTWARE=1",
+            "--env=SLINT_WGPU_CPU=1",
+            f"--env=VK_DRIVER_FILES={FLATPAK_LAVAPIPE_ICD}",
+            f"--env=VK_ICD_FILENAMES={FLATPAK_LAVAPIPE_ICD}",
+            "--env=VK_LOADER_DEBUG=error,warn,info,driver",
             # Grant both real endpoints; fallback-x11 masks X11 when Wayland exists.
             "--socket=wayland",
             "--socket=x11",
-            app["launch"],
         ]
+        # The runtime extension stores its ICD manifests outside the loader's
+        # default search paths, so select its sandboxed lavapipe manifest.
+        # Slint's WGPU renderer otherwise rejects Mesa's CPU Vulkan adapter;
+        # this override allows lavapipe in the software-only CI environment.
+        # Loader diagnostics remain in the per-app stderr log for Vulkan apps.
+        command.append(app["launch"])
+        return command
     return ["gtk-launch", app["launch"]]
+
+
+def capture_flatpak_runtime_diagnostics(app: dict, client_environment: dict[str, str], artifact_dir: Path) -> dict:
+    """Record Vulkan driver visibility inside a Flatpak after a no-window launch."""
+    diagnostic_dir = artifact_dir / "flatpak-runtime-diagnostics"
+    diagnostic_dir.mkdir(parents=True, exist_ok=True)
+    diagnostic_path = diagnostic_dir / f"{hashlib.sha256(app['app_id'].encode()).hexdigest()[:12]}.txt"
+    probe = r"""set +e
+echo '--- sandbox identity ---'
+id
+cat /etc/os-release
+printf '\n--- Vulkan-related environment ---\n'
+env | sort | grep -E '^(VK_|SLINT_WGPU_CPU=|MESA_|LIBGL_|LD_LIBRARY_PATH|FLATPAK_GL_DRIVERS=|XDG_(DATA|CONFIG)_DIRS=)' || true
+printf '\n--- Vulkan ICD manifests visible in sandbox ---\n'
+find /usr \( -type f -o -type l \) -path '*/vulkan/icd.d/*.json' -print -exec cat {} \; 2>/dev/null
+printf '\n--- lavapipe and Vulkan loader libraries visible in sandbox ---\n'
+find /usr/lib /usr/lib64 -maxdepth 10 \( -type f -o -type l \) \( -name 'libvulkan_lvp.so' -o -name 'libvulkan.so.1' \) -print 2>/dev/null
+if command -v ldconfig >/dev/null 2>&1; then ldconfig -p 2>/dev/null | grep -i vulkan || true; fi
+printf '\n--- Vulkan device nodes visible in sandbox ---\n'
+ls -la /dev/dri /dev/vulkan 2>&1 || true
+printf '\n--- in-sandbox vulkaninfo ---\n'
+if command -v vulkaninfo >/dev/null 2>&1; then vulkaninfo --summary 2>&1; else echo 'vulkaninfo is not installed in the app runtime'; fi
+"""
+    environment = client_environment.copy()
+    environment.pop("VK_ICD_FILENAMES", None)
+    probe_command = [
+        "flatpak",
+        "run",
+        "--verbose",
+        f"--env=DISPLAY={client_environment['DISPLAY']}",
+        f"--env=LANG={client_environment['LANG']}",
+        "--env=LIBGL_ALWAYS_SOFTWARE=1",
+        "--env=SLINT_WGPU_CPU=1",
+        f"--env=VK_DRIVER_FILES={FLATPAK_LAVAPIPE_ICD}",
+        f"--env=VK_ICD_FILENAMES={FLATPAK_LAVAPIPE_ICD}",
+        "--env=VK_LOADER_DEBUG=error,warn,info,driver",
+        "--socket=wayland",
+        "--socket=x11",
+        "--command=sh",
+        app["launch"],
+        "-c",
+        probe,
+    ]
+    with diagnostic_path.open("w", buffering=1) as log:
+        log.write("--- host Flatpak runtime and GL extension metadata ---\n")
+        commands = [
+            ["flatpak", "--version"],
+            ["flatpak", "--installations"],
+            ["flatpak", "list", "--system", "--runtime", "--columns=ref,origin"],
+            ["flatpak", "info", "--system", "--show-extensions", app["install"]],
+            ["flatpak", "info", "--system", "--show-location", app["install"]],
+        ]
+        for metadata_command in commands:
+            log.write(f"\n$ {' '.join(metadata_command)}\n")
+            try:
+                subprocess.run(
+                    metadata_command,
+                    env=environment,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=10,
+                    check=False,
+                )
+            except (OSError, subprocess.TimeoutExpired) as error:
+                log.write(f"Could not run Flatpak metadata probe: {error}\n")
+        runtime_command = ["flatpak", "info", "--system", "--show-runtime", app["install"]]
+        try:
+            log.write(f"\n$ {' '.join(runtime_command)}\n")
+            runtime_result = subprocess.run(
+                runtime_command,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            runtime_ref = runtime_result.stdout.strip()
+            log.write(f"\nApp runtime reference: {runtime_ref or '(unavailable)'}\n")
+            log.write(runtime_result.stderr)
+            if runtime_result.returncode == 0 and runtime_ref:
+                extension_command = [
+                    "flatpak",
+                    "info",
+                    "--system",
+                    "--show-extensions",
+                    runtime_ref,
+                ]
+                log.write(f"\n$ {' '.join(extension_command)}\n")
+                subprocess.run(
+                    extension_command,
+                    env=environment,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=10,
+                    check=False,
+                )
+                installed_extensions = subprocess.run(
+                    ["flatpak", "list", "--system", "--runtime", "--columns=ref"],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                for extension_ref in installed_extensions.stdout.splitlines():
+                    if "org.freedesktop.Platform.GL." not in extension_ref:
+                        continue
+                    location_command = [
+                        "flatpak",
+                        "info",
+                        "--system",
+                        "--show-location",
+                        extension_ref,
+                    ]
+                    log.write(f"\n$ {' '.join(location_command)}\n")
+                    subprocess.run(
+                        location_command,
+                        env=environment,
+                        stdout=log,
+                        stderr=subprocess.STDOUT,
+                        timeout=10,
+                        check=False,
+                    )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            log.write(f"Could not inspect app runtime extensions: {error}\n")
+        log.write("\n--- app sandbox probe ---\n")
+        log.write(f"$ {' '.join(probe_command)}\n")
+        try:
+            result = subprocess.run(
+                probe_command,
+                env=environment,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+                check=False,
+            )
+            log.write(f"\nSandbox probe exit code: {result.returncode}\n")
+            return {"path": str(diagnostic_path), "return_code": result.returncode}
+        except (OSError, subprocess.TimeoutExpired) as error:
+            log.write(f"Could not complete app sandbox probe: {error}\n")
+            return {"path": str(diagnostic_path), "error": str(error)}
 
 
 def stop_process_group(process: subprocess.Popen, grace_seconds: float = 2.0) -> None:
@@ -312,6 +591,18 @@ def stop_process_group(process: subprocess.Popen, grace_seconds: float = 2.0) ->
 
     if process.poll() is None:
         process.wait(timeout=2)
+
+
+def pid_is_alive(pid: int | None) -> bool | None:
+    if pid is None or pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def app_environment() -> dict[str, str]:
@@ -342,6 +633,11 @@ def app_environment() -> dict[str, str]:
     if env.get("LANG") in (None, "", "C", "C.UTF-8", "POSIX"):
         env["LANG"] = "en_US.UTF-8"
     env["LIBGL_ALWAYS_SOFTWARE"] = "1"
+    vulkan_icd = os.environ.get("GNOBLIN_E2E_VULKAN_ICD")
+    if vulkan_icd:
+        if not Path(vulkan_icd).is_file():
+            raise RuntimeError(f"configured Vulkan ICD does not exist: {vulkan_icd}")
+        env["VK_ICD_FILENAMES"] = vulkan_icd
     # The shell itself forces Wayland, but launched applications need to select
     # their native backend or fall back to the XWayland display Mutter provides.
     env.pop("GDK_BACKEND", None)
@@ -352,33 +648,123 @@ def app_environment() -> dict[str, str]:
         f"DISPLAY={display} "
         f"XAUTHORITY-readable={os.access(xauthority, os.R_OK)} "
         f"XDG_RUNTIME_DIR={env.get('XDG_RUNTIME_DIR')} "
-        f"LANG={env['LANG']} LIBGL_ALWAYS_SOFTWARE=1",
+        f"LANG={env['LANG']} LIBGL_ALWAYS_SOFTWARE=1 "
+        f"VK_ICD_FILENAMES={env.get('VK_ICD_FILENAMES', '(default)')}",
         flush=True,
     )
     return env
 
 
-def close_sequence(sequence: int, timeout: float = 10) -> str:
+def close_sequence(
+    sequence: int,
+    modal_dialog_type: int,
+    timeout: float = 10,
+    screenshot_after_miss: Callable[[], str | None] | None = None,
+) -> tuple[str, dict[str, object]]:
     state = window_state(sequence)
     if state is None:
-        return "already-closed"
-    if state["layout"]["border"][0]:
-        close_x = state["x"] + max(12, state["width"] - 20)
-        close_y = state["y"] + 18
-        send_pointer("move", close_x, close_y)
-        time.sleep(0.025)
-        send_pointer("click", close_x, close_y)
-        try:
-            wait_for(lambda: window_state(sequence) is None, "titlebar close button", timeout=2)
-            send_pointer("move", 4, 780)
-            return "titlebar-close-button"
-        except TimeoutError:
-            pass
+        return "already-closed", {}
+    state = wait_for_settled_close_target(lambda: window_state(sequence), stable_seconds=0.15, timeout=4)
+    if state is None:
+        return "already-closed", {}
+
+    windows_before_close = {window["sequence"] for window in shell_windows()}
+    has_gnoblin_frame = gnoblin_frame_visible(state)
+    click_details: dict[str, object] = {
+        "window_before_close": window_evidence(state),
+        "frame_presentation_before_close": state["layout"].get("presentation"),
+    }
+    if has_gnoblin_frame or not state["fullscreen"]:
+        if has_gnoblin_frame:
+            try:
+                close_x, close_y = frame_button_center(state, FRAME_ACTION_CLOSE)
+                close_region = next(
+                    item for item in state["layout"]["presentation"]["regions"] if item[0] == FRAME_ACTION_CLOSE
+                )
+                click_details.update(
+                    {
+                        "button": "gnoblin-close",
+                        "target": [close_x, close_y],
+                        "region": close_region,
+                    }
+                )
+            except RuntimeError as error:
+                click_details.update({"button": "gnoblin-close", "target_error": str(error)})
+                close_x = close_y = None
+        else:
+            close_x = state["x"] + max(12, state["width"] - 20)
+            close_y = state["y"] + 18
+            click_details.update({"button": "client-titlebar-close", "target": [close_x, close_y]})
+        if close_x is not None and close_y is not None:
+            send_pointer("move", state["x"] + state["width"] // 2, close_y)
+            time.sleep(0.025)
+            send_pointer("move", close_x, close_y)
+            time.sleep(0.025)
+            send_pointer("click", close_x, close_y)
+            button_name = "Gnoblin titlebar close button" if has_gnoblin_frame else "client titlebar close button"
+            try:
+                wait_for(lambda: window_state(sequence) is None, button_name, timeout=2)
+                send_pointer("move", 4, 780)
+                method = "titlebar-close-button" if has_gnoblin_frame else "client-titlebar-close-button"
+                return method, click_details
+            except TimeoutError:
+                post_click_state = window_state(sequence)
+                method = "titlebar-close-button" if has_gnoblin_frame else "client-titlebar-close-button"
+                if post_click_state is None:
+                    send_pointer("move", 4, 780)
+                    return method, {**click_details, "closed_after_timeout": True}
+                click_details["window_after_close_click"] = window_evidence(post_click_state)
+                post_click_windows = shell_windows()
+                same_process_windows = [
+                    window
+                    for window in post_click_windows
+                    if state["pid"] is not None and window["pid"] == state["pid"]
+                ]
+                if post_click_state is not None:
+                    click_details["post_click_frame_presentation"] = post_click_state["layout"]["presentation"]
+                click_details["same_process_windows_after_click"] = [
+                    {key: window[key] for key in ("sequence", "title", "type", "pid", "x", "y", "width", "height")}
+                    for window in same_process_windows
+                ]
+                if screenshot_after_miss is not None:
+                    click_details["screenshot_after_close_click_miss"] = screenshot_after_miss()
+
+                def newly_opened_application_modal() -> dict | None:
+                    return next(
+                        (
+                            window
+                            for window in shell_windows()
+                            if window["sequence"] not in windows_before_close
+                            and state["pid"] is not None
+                            and window["pid"] == state["pid"]
+                            and window["type"] == modal_dialog_type
+                            and window["ready"]
+                            and window["mapped"]
+                        ),
+                        None,
+                    )
+
+                try:
+                    dialog = wait_for(
+                        newly_opened_application_modal,
+                        "application modal opened after titlebar close",
+                        timeout=1,
+                    )
+                except TimeoutError:
+                    dialog = None
+                if dialog is not None:
+                    send_pointer("move", 4, 780)
+                    return "application-modal-opened", {
+                        **click_details,
+                        "application_modal": {
+                            key: dialog[key] for key in ("sequence", "title", "pid", "x", "y", "width", "height")
+                        },
+                    }
     if window_state(sequence) is not None:
         mutate(sequence, "w.delete(global.get_current_time())")
         wait_for(lambda: window_state(sequence) is None, "window close", timeout=timeout)
     send_pointer("move", 4, 780)
-    return "window-delete-fallback"
+    return "window-delete-fallback", click_details
 
 
 def run_one_app(
@@ -411,12 +797,16 @@ def run_one_app(
     }
     with log_path.open("w") as log:
         try:
+            process_environment = client_environment
+            if app["source"] == "flathub-popular":
+                process_environment = client_environment.copy()
+                process_environment.pop("VK_ICD_FILENAMES", None)
             process = subprocess.Popen(
                 app_command(app, client_environment),
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                env=client_environment,
+                env=process_environment,
                 start_new_session=True,
             )
         except Exception as error:
@@ -433,14 +823,36 @@ def run_one_app(
                 new_windows = wait_for(
                     app_windows, f"{app['app_id']} to map a Wayland/X11 window", timeout=launch_timeout
                 )
-                time.sleep(0.6)
-                new_windows = app_windows()
+                new_windows, startup_settled, startup_settle_seconds = wait_for_stable_application_windows(
+                    app_windows,
+                    stable_for=APP_WINDOW_STABLE_SECONDS,
+                    timeout=APP_WINDOW_SETTLE_TIMEOUT_SECONDS,
+                )
                 if not new_windows:
-                    raise TimeoutError(f"{app['app_id']} closed its first window before the test began")
+                    raise TimeoutError(f"{app['app_id']} closed its first window before a stable window appeared")
             except TimeoutError as error:
-                state.update(status="no-window", error=str(error), process_exit_code=process.poll())
+                launcher_exit_code = process.poll()
+                state.update(
+                    status="no-window",
+                    error=str(error),
+                    elapsed_seconds=round(time.monotonic() - started, 3),
+                    launcher_exit_code=launcher_exit_code,
+                    launcher_alive_at_timeout=launcher_exit_code is None,
+                )
+                if app["source"] == "flathub-popular":
+                    if launcher_exit_code is None:
+                        stop_process_group(process)
+                    state["flatpak_runtime_diagnostics"] = capture_flatpak_runtime_diagnostics(
+                        app, client_environment, events_path.parent
+                    )
                 return state
 
+            state["window_startup"] = {
+                "settled": startup_settled,
+                "stable_seconds": APP_WINDOW_STABLE_SECONDS,
+                "settle_seconds": startup_settle_seconds,
+                "timeout_seconds": APP_WINDOW_SETTLE_TIMEOUT_SECONDS,
+            }
             state["screenshot"] = screenshot(app, screenshot_dir)
             state["windows"] = [window["sequence"] for window in new_windows]
             state["window_observations"] = [window_state(window["sequence"]) for window in new_windows]
@@ -451,41 +863,190 @@ def run_one_app(
             )
 
             control_failed = False
+            window_client_pids: dict[int, int | None] = {}
             for mapped in new_windows:
                 sequence = mapped["sequence"]
+                client_pid = mapped.get("pid")
+                window_client_pids[sequence] = client_pid
+                resize_capability_seen = False
+                resize_verified = False
+                window_disappeared = False
                 current = window_state(sequence)
                 if current is None:
-                    state["operations"].append(
-                        {"window": sequence, "operation": "observe", "status": "closed-before-test"}
+                    successful_same_process_closes = [
+                        operation
+                        for operation in state["operations"]
+                        if operation.get("operation") == "close"
+                        and operation.get("status")
+                        in (
+                            "titlebar-close-button",
+                            "client-titlebar-close-button",
+                            "window-delete-fallback",
+                        )
+                        and window_client_pids.get(operation.get("window")) == client_pid
+                    ]
+                    try:
+                        remaining_application_windows = app_windows()
+                    except Exception as error:
+                        remaining_application_windows = [{"observation_error": str(error)}]
+                    same_process_windows = [
+                        candidate for candidate in remaining_application_windows if candidate.get("pid") == client_pid
+                    ]
+                    closed_with_application = (
+                        client_pid is not None
+                        and bool(successful_same_process_closes)
+                        and not same_process_windows
+                        and not any("observation_error" in candidate for candidate in remaining_application_windows)
                     )
-                    control_failed = True
+                    result = {
+                        "window": sequence,
+                        "operation": "observe",
+                        "status": "closed-with-application" if closed_with_application else "window-disappeared",
+                        "client_pid": client_pid,
+                        "client_pid_alive_at_observation": pid_is_alive(client_pid),
+                        "closed_after_window": (
+                            successful_same_process_closes[-1].get("window") if successful_same_process_closes else None
+                        ),
+                        "remaining_application_windows": remaining_application_windows,
+                    }
+                    state["operations"].append(result)
+                    write_event(events_path, {"phase": "operation", "app_id": app["app_id"], **result})
+                    if not closed_with_application:
+                        control_failed = True
                     continue
+                window_client_pids[sequence] = current.get("pid")
 
                 def record(operation: str, status: str, **details: object) -> None:
                     result = {"window": sequence, "operation": operation, "status": status, **details}
                     state["operations"].append(result)
                     write_event(events_path, {"phase": "operation", "app_id": app["app_id"], **result})
 
+                def mark_window_disappeared(
+                    operation: str,
+                    *,
+                    error: Exception | None = None,
+                    before: dict | None = None,
+                    request_details: dict[str, object] | None = None,
+                ) -> None:
+                    nonlocal control_failed, window_disappeared
+                    if window_disappeared:
+                        return
+                    details: dict[str, object] = {
+                        "before": window_evidence(before),
+                        "after": None,
+                    }
+                    client_pid = before.get("pid") if before else None
+                    details["client_pid"] = client_pid
+                    details["client_pid_alive_at_disappearance"] = pid_is_alive(client_pid)
+                    try:
+                        details["remaining_application_windows"] = [
+                            window_state(candidate["sequence"]) for candidate in app_windows()
+                        ]
+                    except Exception as evidence_error:
+                        details["remaining_application_windows_error"] = str(evidence_error)
+                    if error is not None:
+                        details["error"] = str(error)
+                    if request_details:
+                        details.update(request_details)
+                    record(operation, "window-disappeared", **details)
+                    window_disappeared = True
+                    control_failed = True
+
                 def invoke(
-                    operation: str, body: str, verify, timeout: float = 2.5, capability: str | None = None
+                    operation: str,
+                    body: str,
+                    verify,
+                    timeout: float = 2.5,
+                    capability: str | None = None,
+                    request: dict[str, object] | None = None,
+                    details: dict[str, object] | None = None,
                 ) -> str:
-                    nonlocal control_failed
+                    nonlocal control_failed, resize_capability_seen, resize_verified
                     current_state = window_state(sequence)
+                    if window_disappeared:
+                        return "window-disappeared"
+                    if current_state is None:
+                        mark_window_disappeared(operation)
+                        return "window-disappeared"
                     if capability and current_state and not current_state[capability]:
                         record(operation, "not-supported", capability=capability)
                         return "not-supported"
+                    if request is not None and current_state and current_state["can_resize"]:
+                        resize_capability_seen = True
+                    request_details = {"request": request} if request is not None else {}
+                    if details:
+                        request_details.update(details)
                     try:
                         mutate(sequence, body)
                         observed = wait_for(verify, operation, timeout=timeout)
-                        record(operation, "observed", observed=observed)
+                        if request is not None:
+                            record(
+                                operation,
+                                "observed",
+                                observed=observed,
+                                before=window_evidence(current_state),
+                                after=capture_window_evidence(sequence),
+                                **request_details,
+                            )
+                            resize_verified = True
+                        else:
+                            record(
+                                operation,
+                                "observed",
+                                observed=observed,
+                                before=window_evidence(current_state),
+                                after=capture_window_evidence(sequence),
+                            )
                         return "observed"
                     except TimeoutError as error:
-                        record(operation, "not-observed", error=str(error))
+                        after = capture_window_evidence(sequence)
+                        if after is None:
+                            mark_window_disappeared(
+                                operation,
+                                error=error,
+                                before=current_state,
+                                request_details=request_details,
+                            )
+                            return "window-disappeared"
+                        if request_is_below_minimum(request, current_state):
+                            record(
+                                operation,
+                                "constrained-by-minimum-size",
+                                error=str(error),
+                                before=window_evidence(current_state),
+                                after=after,
+                                **request_details,
+                            )
+                            return "constrained-by-minimum-size"
+                        record(
+                            operation,
+                            "not-observed",
+                            error=str(error),
+                            before=window_evidence(current_state),
+                            after=after,
+                            **request_details,
+                        )
                         if capability and current_state and current_state[capability]:
                             control_failed = True
                         return "not-observed"
                     except Exception as error:
-                        record(operation, "unsupported-or-error", error=str(error))
+                        after = capture_window_evidence(sequence)
+                        if after is None:
+                            mark_window_disappeared(
+                                operation,
+                                error=error,
+                                before=current_state,
+                                request_details=request_details,
+                            )
+                            return "window-disappeared"
+                        record(
+                            operation,
+                            "unsupported-or-error",
+                            error=str(error),
+                            before=window_evidence(current_state),
+                            after=after,
+                            **request_details,
+                        )
                         if capability and current_state and current_state[capability]:
                             control_failed = True
                         return "unsupported-or-error"
@@ -517,19 +1078,30 @@ def run_one_app(
                     )
 
                 try:
-                    mutate(
-                        sequence,
-                        "imports.gi.Meta.gnoblin_window_frame_set(w,"
-                        f"new imports.gi.GLib.Variant('(iiiiiiiii)',{json.dumps(FRAME_POLICY)}))",
-                    )
-                    wait_for(
-                        lambda: (window_state(sequence) or {}).get("layout", {}).get("border", [0])[0] == 36,
-                        "Gnoblin native frame",
-                        timeout=2,
-                    )
-                    record("native-frame", "observed")
+                    current = window_state(sequence)
+                    if current is None:
+                        mark_window_disappeared("native-frame")
+                        continue
+                    if not current["layout"].get("supported"):
+                        record("native-frame", "not-supported", capability="Wayland toplevel")
+                    else:
+                        mutate(
+                            sequence,
+                            "imports.gi.Meta.gnoblin_window_frame_set(w,"
+                            f"new imports.gi.GLib.Variant('(iiiiiiiii)',{json.dumps(FRAME_POLICY)}))",
+                        )
+                        wait_for(
+                            lambda: (window_state(sequence) or {}).get("layout", {}).get("border", [0])[0] == 36,
+                            "Gnoblin native frame",
+                            timeout=2,
+                        )
+                        record("native-frame", "observed")
                 except Exception as error:
-                    record("native-frame", "unsupported-or-error", error=str(error))
+                    after = capture_window_evidence(sequence)
+                    if after is None:
+                        mark_window_disappeared("native-frame", error=error)
+                    else:
+                        record("native-frame", "unsupported-or-error", error=str(error))
 
                 for name, x, y in (
                     ("move-center", 48, 76),
@@ -538,23 +1110,53 @@ def run_one_app(
                 ):
                     before = window_state(sequence)
                     if not before:
-                        record(name, "window-disappeared")
-                        control_failed = True
+                        mark_window_disappeared(name)
                         break
-                    invoke(
-                        name,
-                        f"w.move_frame(false,{x},{y})",
-                        lambda: (
-                            lambda after: after is not None and (after["x"], after["y"]) != (before["x"], before["y"])
-                        )(window_state(sequence)),
-                        timeout=1.5,
-                        capability="can_move",
-                    )
+                    target_x, target_y = constrain_move_to_monitor(before, x, y)
+                    if (target_x, target_y) == (before["x"], before["y"]):
+                        status = (
+                            "already-at-requested-position"
+                            if (target_x, target_y) == (x, y)
+                            else "constrained-by-monitor-geometry"
+                        )
+                        record(
+                            name,
+                            status,
+                            requested_position=[x, y],
+                            effective_position=[target_x, target_y],
+                            current_position=[before["x"], before["y"]],
+                        )
+                    else:
+                        invoke(
+                            name,
+                            f"w.move_frame(false,{target_x},{target_y})",
+                            lambda: (
+                                lambda after: (
+                                    after is not None
+                                    and (after["x"], after["y"]) == (target_x, target_y)
+                                    and (after["x"], after["y"]) != (before["x"], before["y"])
+                                )
+                            )(window_state(sequence)),
+                            timeout=1.5,
+                            capability="can_move",
+                            details={
+                                "requested_position": [x, y],
+                                "effective_position": [target_x, target_y],
+                            },
+                        )
                     for size_name, width, height in (("center", 700, 440), ("edge", 960, 620), ("small", 300, 220)):
                         before = window_state(sequence)
                         if not before:
-                            record(f"resize-{size_name}", "window-disappeared")
+                            mark_window_disappeared(f"resize-{size_name}")
                             break
+                        request = {"frame_rect": [x, y, width, height]}
+                        if size_name == "edge" and request_is_below_minimum(request, before):
+                            width = max(width, before["width"] + 80)
+                            height = before["height"]
+                            request = {
+                                "frame_rect": [x, y, width, height],
+                                "probe": "above-current-width-after-minimum-clamp",
+                            }
                         invoke(
                             f"resize-{size_name}",
                             f"w.move_resize_frame(false,{x},{y},{width},{height})",
@@ -566,7 +1168,12 @@ def run_one_app(
                             )(window_state(sequence)),
                             timeout=1.5,
                             capability="can_resize",
+                            request=request,
                         )
+                        if window_disappeared:
+                            break
+                    if window_disappeared:
+                        break
 
                 monitor_count = eval_shell("global.display.get_n_monitors()")
                 if monitor_count > 1:
@@ -586,7 +1193,7 @@ def run_one_app(
                     )
 
                 current = window_state(sequence)
-                if current and current["layout"]["border"][0]:
+                if current and gnoblin_frame_visible(current):
                     try:
                         x, y, width, height = (current[k] for k in ("x", "y", "width", "height"))
                         shell_drag(
@@ -601,35 +1208,130 @@ def run_one_app(
                         )
                         record("titlebar-drag", "observed", state=dragged)
                     except Exception as error:
-                        record("titlebar-drag", "unsupported-or-error", error=str(error))
-                        if current["can_move"]:
-                            control_failed = True
+                        after = capture_window_evidence(sequence)
+                        if after is None:
+                            mark_window_disappeared("titlebar-drag", error=error, before=current)
+                        else:
+                            record("titlebar-drag", "unsupported-or-error", error=str(error))
+                            if current["can_move"]:
+                                control_failed = True
                     before = None
                     try:
                         before = window_state(sequence)
                         if before and before["can_resize"]:
                             x, y, width, height = (before[k] for k in ("x", "y", "width", "height"))
-                            shell_drag(
-                                x + width - 2, y + height - 2, min(1276, x + width + 38), min(796, y + height + 30)
-                            )
-                            resized = wait_for(
-                                lambda: (
-                                    lambda after: (
-                                        after
-                                        if after and (after["width"], after["height"]) != (width, height)
-                                        else None
+                            monitor = before["monitor_rect"]
+                            monitor_left = monitor["x"]
+                            monitor_top = monitor["y"]
+                            monitor_right = monitor_left + monitor["width"]
+                            monitor_bottom = monitor_top + monitor["height"]
+                            if x + width > monitor_right - 40 and width <= monitor["width"] - 48:
+                                resize_x = monitor_left + 24
+                                if abs(x - resize_x) > 2:
+                                    previous = window_evidence(before)
+                                    mutate(sequence, f"w.move_frame(false,{resize_x},{y})")
+                                    before = wait_for(
+                                        lambda: (
+                                            lambda after: after if after and abs(after["x"] - resize_x) <= 2 else None
+                                        )(window_state(sequence)),
+                                        "positioning window for visible resize edge",
+                                        timeout=1.5,
                                     )
-                                )(window_state(sequence)),
-                                "native-frame resize handle",
-                                timeout=1.5,
-                            )
-                            record("resize-handle-drag", "observed", state=resized)
+                                    record(
+                                        "resize-handle-position",
+                                        "observed",
+                                        before=previous,
+                                        after=window_evidence(before),
+                                    )
+                                    x, y, width, height = (before[k] for k in ("x", "y", "width", "height"))
+                            right_edge = x + width - 2
+                            bottom_edge = y + height - 2
+                            drag_edge = None
+                            drag_start = drag_end = None
+                            if (
+                                monitor_left + 2 <= right_edge < monitor_right - 2
+                                and monitor_top + 2 <= bottom_edge < monitor_bottom - 2
+                            ):
+                                drag_end = (
+                                    min(right_edge + 38, monitor_right - 2),
+                                    min(bottom_edge + 30, monitor_bottom - 2),
+                                )
+                                if drag_end[0] - right_edge >= 8 and drag_end[1] - bottom_edge >= 8:
+                                    drag_edge = "bottom-right"
+                                    drag_start = (right_edge, bottom_edge)
+                            if drag_edge is None:
+                                top_edge = y + 2
+                                top_drag_distance = min(30, top_edge - (monitor_top + 2))
+                                if monitor_left + 2 <= right_edge < monitor_right - 2 and top_drag_distance >= 8:
+                                    drag_edge = "top-right"
+                                    drag_start = (right_edge, top_edge)
+                                    drag_end = (
+                                        min(right_edge + 38, monitor_right - 2),
+                                        top_edge - top_drag_distance,
+                                    )
+                            if drag_edge is None:
+                                handle_y = min(max(y + height // 2, monitor_top + 2), monitor_bottom - 2)
+                                drag_end_x = min(right_edge + 38, monitor_right - 2)
+                                if (
+                                    monitor_left + 2 <= right_edge < monitor_right - 2
+                                    and drag_end_x - right_edge >= 8
+                                    and monitor_top + 2 <= handle_y < monitor_bottom - 2
+                                ):
+                                    drag_edge = "right"
+                                    drag_start = (right_edge, handle_y)
+                                    drag_end = (drag_end_x, handle_y)
+                            if drag_edge is not None:
+                                assert drag_start is not None and drag_end is not None
+                                shell_drag(*drag_start, *drag_end)
+                                resized = wait_for(
+                                    lambda: (
+                                        lambda after: (
+                                            after
+                                            if after and (after["width"], after["height"]) != (width, height)
+                                            else None
+                                        )
+                                    )(window_state(sequence)),
+                                    f"visible native-frame {drag_edge} resize handle",
+                                    timeout=1.5,
+                                )
+                                record(
+                                    "resize-handle-drag",
+                                    "observed",
+                                    edge=drag_edge,
+                                    before=window_evidence(before),
+                                    after=window_evidence(resized),
+                                )
+                                resize_verified = True
+                            else:
+                                record(
+                                    "resize-handle-drag",
+                                    "constrained-by-visible-monitor-edge",
+                                    before=window_evidence(before),
+                                    request={
+                                        "edge": "right",
+                                        "available_rightward_drag": max(0, monitor_right - right_edge),
+                                    },
+                                )
                         elif before:
                             record("resize-handle-drag", "not-supported", capability="can_resize")
                     except Exception as error:
-                        record("resize-handle-drag", "unsupported-or-error", error=str(error))
-                        if before and before["can_resize"]:
-                            control_failed = True
+                        after = capture_window_evidence(sequence)
+                        if after is None:
+                            mark_window_disappeared("resize-handle-drag", error=error, before=before)
+                        else:
+                            record(
+                                "resize-handle-drag",
+                                "unsupported-or-error",
+                                error=str(error),
+                                before=window_evidence(before),
+                                after=after,
+                            )
+                            if before and before["can_resize"]:
+                                control_failed = True
+
+                if resize_capability_seen and not resize_verified and not window_disappeared:
+                    record("resize", "no-valid-resize-observed", capability="can_resize")
+                    control_failed = True
 
                 invoke(
                     "maximize",
@@ -665,17 +1367,56 @@ def run_one_app(
                     "w.unmake_fullscreen()",
                     lambda: (lambda after: after is not None and not after["fullscreen"])(window_state(sequence)),
                 )
+                initial = None
                 try:
                     initial = window_state(sequence)
-                    close_method = close_sequence(sequence)
-                    close_result = {"window": sequence, "operation": "close", "status": close_method}
-                    state["operations"].append(close_result)
-                    write_event(events_path, {"phase": "operation", "app_id": app["app_id"], **close_result})
-                    if initial and initial["layout"]["border"][0] and close_method != "titlebar-close-button":
-                        control_failed = True
+                    if initial is None:
+                        mark_window_disappeared("close")
+                    else:
+                        close_method, close_details = close_sequence(
+                            sequence,
+                            modal_dialog_type,
+                            screenshot_after_miss=lambda: screenshot(app, screenshot_dir, "close-click-miss"),
+                        )
+                        if close_method == "application-modal-opened":
+                            close_details["screenshot"] = screenshot(app, screenshot_dir, "close-dialog")
+                        close_result = {
+                            "window": sequence,
+                            "operation": "close",
+                            "status": close_method,
+                            **close_details,
+                        }
+                        state["operations"].append(close_result)
+                        write_event(events_path, {"phase": "operation", "app_id": app["app_id"], **close_result})
+                        frame_before_close = close_details.get("frame_presentation_before_close") or {}
+                        if frame_before_close.get("visible") and close_method not in (
+                            "titlebar-close-button",
+                            "application-modal-opened",
+                        ):
+                            control_failed = True
                 except Exception as error:
+                    try:
+                        after_full_state = window_state(sequence)
+                    except Exception:
+                        after_full_state = None
+                    try:
+                        remaining_windows = app_windows()
+                    except Exception as observation_error:
+                        remaining_windows = [{"observation_error": str(observation_error)}]
+                    close_error_screenshot = screenshot(app, screenshot_dir, "close-error")
                     state["operations"].append(
-                        {"window": sequence, "operation": "close", "status": "error", "error": str(error)}
+                        {
+                            "window": sequence,
+                            "operation": "close",
+                            "status": "error",
+                            "error": str(error),
+                            "before": window_evidence(initial),
+                            "after": window_evidence(after_full_state),
+                            "frame_presentation_after": (after_full_state or {}).get("layout", {}).get("presentation"),
+                            "application_windows_after": remaining_windows,
+                            "screenshot_after": close_error_screenshot,
+                            "client_pid_alive_after": pid_is_alive((initial or {}).get("pid")),
+                        }
                     )
             close_failed = any(
                 operation.get("operation") == "close" and operation.get("status") == "error"
@@ -687,6 +1428,17 @@ def run_one_app(
                 else ("exercised" if state["windows"] else "no-window")
             )
             state["elapsed_seconds"] = round(time.monotonic() - started, 3)
+            state["window_processes"] = [
+                {
+                    "window": sequence,
+                    "client_pid": pid,
+                    "client_pid_alive_at_sequence_end": pid_is_alive(pid),
+                }
+                for sequence, pid in window_client_pids.items()
+            ]
+            launcher_exit_code = process.poll()
+            state["launcher_exit_code"] = launcher_exit_code
+            state["launcher_alive_at_end"] = launcher_exit_code is None
             return state
         except BaseException:
             process.send_signal(signal.SIGTERM) if process.poll() is None else None
@@ -697,6 +1449,30 @@ def run_one_app(
             raise
         finally:
             stop_process_group(process)
+
+
+def exercise_disconnected_ibus_guard() -> dict:
+    """Close IBus during activation, then verify the stale-ready path is safe."""
+    result = eval_shell(
+        "(async()=>{const manager=Main.componentManager?._allComponents?.gnoblinControl?._inputSourceManager?._ibusManager;"
+        "if(!manager)throw new Error('IBus manager was not reachable through GnoblinControl');"
+        "const bus=manager._ibus;"
+        "const readyBefore=manager._ready,connectedBefore=bus.is_connected(),cancellable=manager._cancellable;"
+        "if(!readyBefore||!connectedBefore||!cancellable)throw new Error(`IBus manager was not ready for disconnect probe: ready=${readyBefore} connected=${connectedBefore} cancellable=${Boolean(cancellable)}`);"
+        "const activation=manager._setEngine('xkb:us::eng');"
+        "GLib.idle_add(GLib.PRIORITY_HIGH,()=>{bus.get_connection().close_sync(null);return GLib.SOURCE_REMOVE;});"
+        "await activation;"
+        "const connectedAfterClose=bus.is_connected();"
+        "const cancelledAfterClose=cancellable.is_cancelled();"
+        "if(connectedAfterClose||!cancelledAfterClose)throw new Error('IBus disconnect did not cancel its in-flight activation');"
+        "manager._ready=true;"
+        "try{await manager._setEngine('xkb:us::eng');}finally{manager._ready=false;}"
+        "return {readyBefore,connectedBefore,connectedAfterClose,cancelledAfterClose,attemptedEngine:'xkb:us::eng'};})()",
+        timeout=15,
+    )
+    if not isinstance(result, dict) or result.get("connectedAfterClose") is not False:
+        raise RuntimeError(f"IBus disconnect probe returned unexpected state: {result!r}")
+    return result
 
 
 def run_inside() -> int:
@@ -744,7 +1520,13 @@ def run_inside() -> int:
         launch_timeout = float(os.environ.get("GNOBLIN_E2E_LAUNCH_TIMEOUT", "25"))
         splashscreen_type = eval_shell("imports.gi.Meta.WindowType.SPLASHSCREEN")
         modal_dialog_type = eval_shell("imports.gi.Meta.WindowType.MODAL_DIALOG")
-        for index, app in enumerate(shard["apps"], start=1):
+        session_probe_only = os.environ.get("GNOBLIN_E2E_SESSION_PROBE_ONLY", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        apps_to_exercise = [] if session_probe_only else shard["apps"]
+        for index, app in enumerate(apps_to_exercise, start=1):
             print(f"app E2E [{index}/{len(shard['apps'])}] {app['source']} {app['app_id']}", flush=True)
             installation = install_results.get(app["app_id"])
             if installation and installation.get("status") != "installed":
@@ -772,16 +1554,34 @@ def run_inside() -> int:
             write_event(events_path, {"phase": "application-complete", **outcome})
             if index % 10 == 0:
                 eval_shell("true")
+        session_checks = {}
+        if os.environ.get("GNOBLIN_E2E_TEST_IBUS_DISCONNECT", "0").lower() in {"1", "true", "yes"}:
+            session_checks["ibus-disconnected-engine-activation"] = exercise_disconnected_ibus_guard()
+            write_event(
+                events_path,
+                {
+                    "phase": "session-check",
+                    "name": "ibus-disconnected-engine-activation",
+                    "status": "completed",
+                    **session_checks["ibus-disconnected-engine-activation"],
+                },
+            )
         counts: dict[str, int] = {}
         for outcome in outcomes:
             counts[outcome["status"]] = counts.get(outcome["status"], 0) + 1
         failed_apps = [outcome["app_id"] for outcome in outcomes if outcome["status"] != "exercised"]
-        failure_policy = os.environ.get("GNOBLIN_E2E_FAILURE_POLICY", "strict")
+        failure_policy = "strict" if session_probe_only else os.environ.get("GNOBLIN_E2E_FAILURE_POLICY", "strict")
         if failure_policy not in {"strict", "required"}:
             raise RuntimeError(f"unsupported app E2E failure policy: {failure_policy!r}")
-        required_apps = {
-            app_id.strip() for app_id in os.environ.get("GNOBLIN_E2E_REQUIRED_APP_IDS", "").split(",") if app_id.strip()
-        }
+        required_apps = (
+            set()
+            if session_probe_only
+            else {
+                app_id.strip()
+                for app_id in os.environ.get("GNOBLIN_E2E_REQUIRED_APP_IDS", "").split(",")
+                if app_id.strip()
+            }
+        )
         if failure_policy == "required" and not required_apps:
             raise RuntimeError("required app E2E policy needs GNOBLIN_E2E_REQUIRED_APP_IDS")
         tested_apps = {outcome["app_id"] for outcome in outcomes}
@@ -795,12 +1595,13 @@ def run_inside() -> int:
             "shard": shard["shard"],
             "catalog_generated_utc": shard["catalog_generated_utc"],
             "fedora_appstream_sha256": shard.get("fedora_appstream_sha256"),
-            "requested_apps": len(shard["apps"]),
+            "requested_apps": len(apps_to_exercise),
             "outcomes": counts,
             "failed_apps": failed_apps,
             "failure_policy": failure_policy,
             "required_apps": sorted(required_apps),
             "blocking_failures": blocking_failures,
+            "session_checks": session_checks,
             "apps": outcomes,
             "completed_utc": datetime.now(timezone.utc).isoformat(),
         }

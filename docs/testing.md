@@ -116,6 +116,53 @@ whether each app maps a window, then captures a screenshot and checks activation
 native frames, move/resize, titlebar dragging, resize handles, maximize,
 minimize, fullscreen and close. It also saves the app's stdout and stderr.
 
+After the first window maps, the driver waits for the app's window set and
+geometry to remain unchanged for four seconds, with a 15-second bound. This lets
+startup splash windows hand off to the real app window before controls begin; the
+trace records whether the window set settled before the bound.
+
+The driver exercises Meta modal-dialog windows first, then the focused app
+window, then other app windows. This lets the test handle setup and confirmation
+dialogs before testing a parent window they may block.
+
+Resize traces include the requested frame rectangle, before/after bounds and
+the app's minimum and maximum size hints. A request is recorded as constrained
+if either requested dimension is below its matching minimum hint; each resizable
+app must still complete a valid resize request.
+
+Window-state traces also include all monitor bounds. Before the physical
+resize-handle probe, the driver positions a window to expose a visible right
+edge when its current placement leaves no room for the pointer drag. It uses a
+visible bottom-right or top-right corner when available, then falls back to the
+right edge.
+
+If the window or monitor leaves no valid drag path, the trace
+records that constraint instead of sending pointer events outside the display.
+
+If an app window disappears during an operation, the trace records the
+operation, client PID status and any remaining app windows, then skips the
+remaining controls for that window. Outcomes also include the launcher's exit
+code and mapped client PID status at sequence end.
+
+After state changes, the driver records the before and after window bounds,
+monitor, frame mode and frame presentation. Before clicking close, it waits for
+the nonfullscreen window geometry and any requested native close-button region
+to settle. This avoids using fullscreen bounds during the compositor's restore
+transition.
+
+Click native frame buttons from the frame actor's stage coordinates after restore.
+Record both the actor and frame positions in the trace.
+
+The close check clicks a Gnoblin or client-drawn titlebar button before sending
+a window-manager close request. A close timeout records
+whether the window still exists and whether Mutter reports it can close.
+If it remains after the titlebar click, the trace records the post-click frame
+action and other mapped windows from the same app process before the fallback.
+
+If a Gnoblin close click opens a new modal from that app process, the trace
+records the dialog and a screenshot as an application response and skips a
+second close request blocked by the modal.
+
 The pull-request run attempts every app in shard 0 but gates on the pinned
 Alacritty close regression. The repair artifact still records outcomes from
 the other apps.
@@ -127,19 +174,52 @@ per-app report for follow-up.
 
 Flathub apps keep their Flatpak sandbox and run without network access, so this
 suite measures desktop-window behavior rather than online service behavior.
+The private session bus provides Flatpak's runtime portal for sandboxed clients
+and the IBus daemon for Shell input-method integration. The runner activates and
+probes IBus on that bus before launching Shell.
 
-The Actions runner uses Fedora 44 and Gnoblin's actual Mutter/Wayland code with
-virtual 1280x800 monitors and software rendering. It exercises real Flatpak
-and RPM clients against real Gnoblin windows without a physical GPU or logged-in
-desktop.
+The Actions runner uses Fedora 44 and Gnoblin's actual Mutter/Wayland code on a
+virtual 1280x800 monitor. Its Fedora app container runs without Docker's
+privileged mode. It grants `SYS_ADMIN` to mount a fresh procfs inside the
+container's private PID namespace for Bubblewrap. The container does not receive
+host GPU or audio devices.
 
-GPU drivers, physical input devices and a hardware login need separate coverage
-using the [hardware verification](real-hardware-verification.md) checklist.
+Each shard records and rejects GPU/audio device nodes before launching clients.
+It uses Mesa software OpenGL and the lavapipe Vulkan ICD.
+
+Flatpak clients select the extension's lavapipe manifest through
+`VK_DRIVER_FILES` and its legacy `VK_ICD_FILENAMES` name. They also set
+`SLINT_WGPU_CPU=1` so Slint can consider CPU adapters such as lavapipe. App
+logs retain Vulkan loader diagnostics. RPM clients use the host ICD.
+
+Even-numbered shards add a 1024x768 monitor. Manual runs can set
+`extra_monitor` to a different secondary size for monitor-size checks.
+
+Each shard starts private PipeWire, WirePlumber and PulseAudio compatibility
+services. It disables hardware monitors, selects the `gnoblin_e2e` null sink,
+and waits until both `pactl get-default-sink` and PulseAudio server info report
+that sink before launching Gnoblin. Audio is discarded, and startup fails with
+diagnostics if the default selection does not settle.
+
+The suite exercises real Flatpak and RPM clients against real Gnoblin windows
+without a physical GPU, audio device or logged-in desktop.
+
+Hardware GPU and audio drivers, physical input devices and a hardware login need
+separate coverage using the [hardware verification](real-hardware-verification.md)
+checklist.
 
 Each shard artifact contains its exact catalog slice, installation report,
 per-app logs and screenshots, JSONL operation trace, summary, shell log and a
-reproduction/repair request when it fails. Re-run a shard locally after
-installing its recorded apps with:
+reproduction/repair request when it fails. A missed titlebar close also saves a
+screenshot and window/frame state before fallback cleanup. Re-run a shard
+locally after installing its recorded apps with:
+
+Flatpak apps that fail to map also include a `flatpak-runtime-diagnostics/`
+log with the app's Flatpak runtime and extension metadata and locations, plus
+the sandbox's Vulkan ICD manifests,
+libraries, environment and device nodes. The log records the shell-probe
+command and exit code; the probe runs inside the app sandbox and runs
+`vulkaninfo` when the app runtime provides it.
 
 ```sh
 GNOBLIN_PREFIX="$PWD/install" \

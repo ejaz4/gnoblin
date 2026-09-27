@@ -14,6 +14,8 @@
 #      GNOBLIN_TEST_SCRIPT_ROOT (optional directory of Gnoblin script fixtures),
 #      GNOBLIN_TEST_GSETTINGS_BACKEND (default memory),
 #      GNOBLIN_TEST_DISABLE_NOTIFICATIONS=1 to seed that feature as disabled,
+#      GNOBLIN_TEST_PIPEWIRE=1 starts private PipeWire audio for app E2E,
+#      GNOBLIN_TEST_IBUS_DAEMON=1 starts persistent IBus for input-source E2E,
 #      GNOBLIN_TEST_UNSAFE_MODE=1 enables Eval on the private test bus only,
 #      MONITOR (default 1280x800), SETTLE (startup timeout seconds, default 25),
 #      EXTRA_MONITOR (optional second virtual monitor, e.g. 1920x1200),
@@ -127,6 +129,7 @@ fi
 DISP="gnoblin-gs-$$"
 SHELL_PID=
 SHELL_REAL_PID_FILE=
+IBUS_PID_FILE=
 cleanup() {
     # Kill the shell by its real PID. $SHELL_PID is dbus-run-session, and
     # killing only that orphans gnome-shell (its environ carries the host
@@ -140,6 +143,15 @@ cleanup() {
         done
         kill -KILL "$shell_real_pid" 2>/dev/null
     fi
+    ibus_pid="$(cat "$IBUS_PID_FILE" 2>/dev/null || true)"
+    if [ -n "$ibus_pid" ]; then
+        kill "$ibus_pid" 2>/dev/null || true
+        for _ in $(seq 1 10); do
+            kill -0 "$ibus_pid" 2>/dev/null || break
+            sleep 0.2
+        done
+        kill -KILL "$ibus_pid" 2>/dev/null || true
+    fi
     [ -n "$SHELL_PID" ] && kill "$SHELL_PID" 2>/dev/null
     [ -n "$SHELL_PID" ] && wait "$SHELL_PID" 2>/dev/null || true
     # the isolated dbus-daemon references $DK in its command line
@@ -149,15 +161,26 @@ cleanup() {
         env="$({ tr '\0' '\n' <"$proc/environ"; } 2>/dev/null || true)"
         case "$env" in *"WAYLAND_DISPLAY=$DISP"*) kill "-KILL" "${proc##*/}" 2>/dev/null || true ;; esac
     done
+    if [ -s "$DK/ibus-daemon.log" ]; then
+        {
+            printf '\n--- private IBus daemon log ---\n'
+            cat "$DK/ibus-daemon.log"
+        } >>"$DK/shell.log"
+    fi
     [ -f "$DK/shell.log" ] && gnoblin_publish_log "$DK/shell.log" gnome-shell-last.log 2>/dev/null || true
     rm -rf "$DK"
 }
 trap cleanup EXIT INT TERM HUP
 
 # Reuse the devkit's isolated dbus config generator (no host portal leakage).
-DBUS_SESSION_CONF="$(python3 "$ROOT/scripts/devkit_dbus.py" "$DK" "$ROOT")" || exit 1
+dbus_config_args=()
+if [ "${GNOBLIN_TEST_FLATPAK_PORTAL:-0}" = 1 ]; then
+    dbus_config_args+=(--flatpak-portal)
+fi
+DBUS_SESSION_CONF="$(python3 "$ROOT/scripts/devkit_dbus.py" "$DK" "$ROOT" "${dbus_config_args[@]}")" || exit 1
 BUS_ADDRESS_FILE="$DK/bus-address"
 SHELL_REAL_PID_FILE="$DK/shell-pid"
+IBUS_PID_FILE="$DK/ibus-daemon-pid"
 
 # Optional GJS boot profile: GNOBLIN_PROFILE=<path> writes a sysprof capture.
 # shell_profiler_init() (gnome-shell src/main.c) starts the profiler only when
@@ -299,6 +322,13 @@ commands 9
   end
   continue
 end
+break g_return_if_fail_warning
+commands 10
+  silent
+  printf "GNOBLIN_GDB_RETURN_IF_FAIL: domain=%s function=%s expression=%s\n", $rdi, $rsi, $rdx
+  bt 40
+  continue
+end
 run
 GDB
     shell_command=(gdb --nx --batch --quiet --command "$gdb_commands" --args "${shell_command[@]}")
@@ -320,9 +350,20 @@ elif [[ "${GNOBLIN_TEST_GDB_CRITICALS:-0}" == 1 ]]; then
         --args "${shell_command[@]}")
 fi
 # The wrapper writes $$ before exec, so the pidfile holds gnome-shell's PID.
+if [[ "${GNOBLIN_TEST_PIPEWIRE:-0}" == 1 ]]; then
+    audio_artifact_dir="${GNOBLIN_E2E_ARTIFACT_DIR:-$GNOBLIN_STATE_DIR}"
+    shell_command=("$ROOT/tests/e2e/run-app-with-virtual-audio.sh"
+        "$audio_artifact_dir" "$SHELL_REAL_PID_FILE" -- "${shell_command[@]}")
+fi
 dbus-run-session --config-file="$DBUS_SESSION_CONF" -- \
-    bash -c 'printf "%s\n" "$DBUS_SESSION_BUS_ADDRESS" > "$1"; printf "%s\n" "$$" > "$2"; shift 2; exec "$@"' \
-    gnoblin-shell "$BUS_ADDRESS_FILE" "$SHELL_REAL_PID_FILE" \
+    bash -c 'source "$1";
+        printf "%s\n" "$DBUS_SESSION_BUS_ADDRESS" > "$2";
+        if [[ "${GNOBLIN_TEST_IBUS_DAEMON:-0}" == 1 ]]; then
+            gnoblin_test_ibus_start "$4" "$5" || exit 1
+        fi
+        printf "%s\n" "$$" > "$3"; shift 5; exec "$@"' \
+    gnoblin-shell "$ROOT/scripts/gnoblin-test-ibus.sh" \
+    "$BUS_ADDRESS_FILE" "$SHELL_REAL_PID_FILE" "$IBUS_PID_FILE" "$DK/ibus-daemon.log" \
     "${shell_command[@]}" \
     >"$DK/shell.log" 2>&1 &
 SHELL_PID=$!
