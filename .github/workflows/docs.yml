@@ -6,13 +6,24 @@ on:
         "docs/**",
         "scripts/docs-vitepress-postbuild.mjs",
         "scripts/prepare-apt-pages.py",
+        "scripts/build-apt-repository.py",
+        "packaging/targets.json",
         "package.json",
         "package-lock.json",
         ".github/workflows/docs.yml",
       ]
   push:
     branches: [main]
-    paths: ["docs/**", "scripts/docs-vitepress-postbuild.mjs", "package.json", "package-lock.json"]
+    paths:
+      [
+        "docs/**",
+        "scripts/docs-vitepress-postbuild.mjs",
+        "scripts/prepare-apt-pages.py",
+        "scripts/build-apt-repository.py",
+        "packaging/targets.json",
+        "package.json",
+        "package-lock.json",
+      ]
   workflow_dispatch:
 permissions:
   contents: read
