@@ -83,6 +83,12 @@ test-native-chrome: gnome-native-chrome-verify
 # Test the user scripting lifecycle.
 test-scripting: gnome-scripting-verify
 
+# Test GNOME Shell brightness synchronization against a fake backlight.
+[private]
+test-brightness-backlight:
+    test -f subprojects/gnome-shell/js/misc/brightnessManager.js || { echo "prepare the patched GNOME Shell tree with 'just build-local' first" >&2; exit 1; }
+    node --test tests/brightness-follows-backlight.test.mjs
+
 # Test notification ownership can move between Gnoblin and another daemon.
 test-notifications: gnome-notifications-verify
 
@@ -508,6 +514,7 @@ verify-installed-headless:
 # Build the current source and patch set before running headless integration.
 [private]
 verify-headless: build-local
+    just test-brightness-backlight
     just verify-installed-headless
 
 # Default local gate: deterministic checks plus the complete headless suite.

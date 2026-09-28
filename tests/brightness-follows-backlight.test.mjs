@@ -53,23 +53,30 @@ class Backlight extends GObjectStub {
     }
 }
 
-// One laptop panel at full brightness, and the manager and keys driving it.
-function laptop() {
-    const backlight = new Backlight(MAX);
-    const monitor = {
-        get_backlight: () => backlight,
-        is_active: () => true,
-        get_display_name: () => "Built-in display",
-        get_vendor: () => "vendor",
-        get_product: () => "product",
-        get_serial: () => "serial",
-        get_color_mode_string: () => "default",
-        get_connector: () => "eDP-1",
-    };
-    const logicalMonitor = { get_monitors: () => [monitor], get_number: () => 0 };
-    const monitorManager = Object.assign(new GObjectStub(), { get_logical_monitors: () => [logicalMonitor] });
+// One or more displays, and the manager and keys driving them.
+function desktop(initialLevels = [1]) {
+    const backlights = initialLevels.map((level) => new Backlight(MIN + level * (MAX - MIN)));
+    const logicalMonitors = backlights.map((backlight, index) => {
+        const monitor = {
+            get_backlight: () => backlight,
+            is_active: () => true,
+            get_display_name: () => `Display ${index + 1}`,
+            get_vendor: () => "vendor",
+            get_product: () => `product-${index}`,
+            get_serial: () => `serial-${index}`,
+            get_color_mode_string: () => "default",
+            get_connector: () => `eDP-${index + 1}`,
+        };
+        return { get_monitors: () => [monitor], get_number: () => index };
+    });
+    const monitorManager = Object.assign(new GObjectStub(), {
+        get_logical_monitors: () => logicalMonitors,
+    });
     globalThis.global = {
-        backend: { get_monitor_manager: () => monitorManager, get_current_logical_monitor: () => logicalMonitor },
+        backend: {
+            get_monitor_manager: () => monitorManager,
+            get_current_logical_monitor: () => logicalMonitors[0],
+        },
         get_persistent_state: () => null,
         set_persistent_state: () => {},
     };
@@ -115,10 +122,12 @@ function laptop() {
         osds,
         press: (key) => keys[key](),
         // e.g. brightnessctl, or a hotkey the firmware handles
-        setOutside: (level) => (backlight.brightness = MIN + level * (MAX - MIN)),
-        level: () => Math.round(((backlight.brightness - MIN) / (MAX - MIN)) * 100) / 100,
+        setOutside: (level, index = 0) => (backlights[index].brightness = MIN + level * (MAX - MIN)),
+        level: (index = 0) => Math.round(((backlights[index].brightness - MIN) / (MAX - MIN)) * 100) / 100,
     };
 }
+
+const laptop = () => desktop([1]);
 
 test(
     "brightness keys step from a level set outside the shell",
@@ -152,5 +161,18 @@ test(
             screen.osds.map((level) => level.toFixed(2)),
             ["0.35"],
         );
+    },
+);
+
+test(
+    "brightness keys preserve relative levels across displays after an outside change",
+    { skip: !existsSync(MANAGER) && "patched gnome-shell tree not prepared" },
+    () => {
+        const screen = desktop([0.8, 0.4]);
+        screen.setOutside(0.6, 0);
+        screen.press("screen-brightness-up");
+
+        assert.equal(screen.level(0), 0.65);
+        assert.equal(screen.level(1), 0.43);
     },
 );
