@@ -1,10 +1,9 @@
 # Gnoblin APT archive
 
 The public archive lives under `https://gnoblin.org/apt/`.
-The release pipeline is configured to publish suites for Debian 11, 12 and 13
-and Ubuntu 22.04, 24.04 and 26.04. A suite is published only after its package
-passes the build, installation, coexistence and removal jobs. Debian 11 builds
-use the final Debian package snapshot from August 31, 2026.
+The release pipeline publishes Debian 13 and Ubuntu 24.04 and 26.04. These
+package candidates pass the build, installation, coexistence and removal jobs.
+Other Debian and Ubuntu targets remain unsupported and are not published.
 
 `scripts/build-apt-repository.py` copies a release's three `.deb` files into
 versioned pool paths, regenerates `Packages` and `Packages.gz`, writes a
