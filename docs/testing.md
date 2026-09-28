@@ -4,13 +4,14 @@ Use a focused test while editing. Run the broader checks before a release.
 
 ## Choose a check
 
-| Command                    | Checks                                         | Requires                         |
-| -------------------------- | ---------------------------------------------- | -------------------------------- |
-| `just check`               | Syntax, logic, config parser and script tests  | Test dependencies                |
-| `just test-session`        | All isolated Shell integration tests           | Current local build              |
-| `just test-all`            | Fast checks, fresh build, headless integration | Build dependencies               |
-| `just test-window-manager` | Mutter native/Wayland/focus suites             | Working seat and file monitoring |
-| `just test-release`        | Full checks plus native tests and RPM builds   | Real host and packaging tools    |
+| Command                      | Checks                                         | Requires                         |
+| ---------------------------- | ---------------------------------------------- | -------------------------------- |
+| `just check`                 | Syntax, logic, config parser and script tests  | Test dependencies                |
+| `just test-session`          | All isolated Shell integration tests           | Current local build              |
+| `just test-all`              | Fast checks, fresh build, headless integration | Build dependencies               |
+| `just test-window-manager`   | Mutter native/Wayland/focus suites             | Working seat and file monitoring |
+| `just test-release`          | Full checks plus native tests and RPM builds   | Real host and packaging tools    |
+| `just test-script-lifecycle` | User-script recovery and async startup         | Node.js                          |
 
 A passing headless build does not prove login, visible shell controls or portal
 consent. Use [hardware verification](real-hardware-verification.md) for those.

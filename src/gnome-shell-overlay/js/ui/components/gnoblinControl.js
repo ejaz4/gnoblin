@@ -62,6 +62,14 @@ const SUPER_RELEASE_PROTOCOL_VERSION = 1;
 const OSD_REQUEST_PROTOCOL_VERSION = 2;
 const TRIM_INTERVAL_SECONDS = 300;
 const BUILT_IN_SERVICE_SCRIPTS = new Set(["compositor-bridge.js", "input-sources.js", "launch-feedback.js"]);
+// How long scripts stay on probation after each (re)load. A compositor that
+// dies inside this window may have been taken down by a script, so the next
+// session starts with scripts paused; past it, the scripts have shown they do
+// not crash it on start, which is the loop recovery guards against, and a
+// session killed later (systemd's stop timeout at logout, Xlib exiting when
+// Xwayland goes first) does not cost the next login its scripts. GNOME Shell
+// guards extensions over the same window.
+const SCRIPT_RECOVERY_WINDOW_SECONDS = 60;
 
 // The live ScriptHost, so the module-level softReload() can re-run scripts.
 let activeScriptHost = null;
@@ -373,11 +381,35 @@ class ScriptHost {
         }
         entries.close(null);
         this._recoveryMarker = directory.get_child(`${pid}.running`);
-        this._recoveryMarker.replace_contents("User scripts active", null, false, Gio.FileCreateFlags.PRIVATE, null);
         this._recoveryShutdown = global.connect("shutdown", () => this._clearRecovery());
     }
 
+    // Leaves a marker while scripts initialize and during their recovery
+    // window. Start the timeout only after initialization finishes.
+    _markRecovery() {
+        this._recoveryMarker.replace_contents("User scripts active", null, false, Gio.FileCreateFlags.PRIVATE, null);
+        if (this._recoveryTimeoutId) GLib.source_remove(this._recoveryTimeoutId);
+        this._recoveryTimeoutId = 0;
+    }
+
+    _startRecoveryWindow() {
+        if (this._recoveryTimeoutId) GLib.source_remove(this._recoveryTimeoutId);
+        this._recoveryTimeoutId = GLib.timeout_add_seconds(
+            GLib.PRIORITY_DEFAULT,
+            SCRIPT_RECOVERY_WINDOW_SECONDS,
+            () => {
+                this._recoveryTimeoutId = 0;
+                this._clearRecovery();
+                return GLib.SOURCE_REMOVE;
+            },
+        );
+    }
+
     _clearRecovery() {
+        if (this._recoveryTimeoutId) {
+            GLib.source_remove(this._recoveryTimeoutId);
+            this._recoveryTimeoutId = 0;
+        }
         try {
             if (this._recoveryMarker?.query_exists(null)) this._recoveryMarker.delete(null);
         } catch (error) {
@@ -484,9 +516,12 @@ class ScriptHost {
             return;
         }
 
+        const scripts = this._scriptPaths();
+        if (scripts.length > 0) this._markRecovery();
+        else this._clearRecovery();
         const gen = ++this._generation;
         const failures = [];
-        for (const [name, path] of this._scriptPaths()) {
+        for (const [name, path] of scripts) {
             // First import in the process uses the plain URI; every later (re)load
             // cache-busts so code edits take effect. Module-level seq so a re-enable
             // in the same process is still fresh.
@@ -529,6 +564,8 @@ class ScriptHost {
                 logError(e, `gnoblin-script: ${name} threw on load`);
             }
         }
+
+        if (scripts.length > 0) this._startRecoveryWindow();
 
         if (failures.length > 0) throw new Error(`failed to load scripts: ${failures.join(", ")}`);
     }

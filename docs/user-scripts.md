@@ -152,7 +152,14 @@ builds the bridge starts as a core service. A file named `compositor-bridge.js` 
 `gnoblinctl script list` reports successfully loaded scripts from all three
 locations. A failed import or callback is logged with its filename.
 `gnoblinctl reload`
-reloads scripts without closing application windows. If the previous session
-ended uncleanly while scripts were active, Gnoblin pauses them for recovery;
-run `gnoblinctl reload` to retry after examining the log. The built-in bridge
-remains separate from script recovery.
+reloads scripts without closing application windows.
+
+When scripts are configured, Gnoblin keeps a recovery marker while they load
+and for one minute after they finish loading or reloading. If the compositor
+stops uncleanly during that time, the next session starts with every script
+paused. It logs `scripts paused for recovery`; run `gnoblinctl reload` after
+examining the log to retry them. With no scripts configured, Gnoblin leaves no
+marker.
+
+A session that ran scripts longer than a minute does not pause them if it is
+killed at logout. The built-in bridge remains separate from script recovery.
