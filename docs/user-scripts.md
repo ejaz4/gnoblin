@@ -154,9 +154,12 @@ locations. A failed import or callback is logged with its filename.
 `gnoblinctl reload`
 reloads scripts without closing application windows.
 
-If the compositor stops uncleanly within a minute of loading or reloading
-scripts, the next session starts with every script paused. It logs
-`scripts paused for recovery`, and scripts stay paused at each login until you
-run `gnoblinctl reload` after examining the log. A session that ran scripts for
-longer does not pause them, even if it is killed at logout. The built-in bridge
-remains separate from script recovery.
+When scripts are configured, Gnoblin keeps a recovery marker while they load
+and for one minute after they finish loading or reloading. If the compositor
+stops uncleanly during that time, the next session starts with every script
+paused. It logs `scripts paused for recovery`; run `gnoblinctl reload` after
+examining the log to retry them. With no scripts configured, Gnoblin leaves no
+marker.
+
+A session that ran scripts longer than a minute does not pause them if it is
+killed at logout. The built-in bridge remains separate from script recovery.

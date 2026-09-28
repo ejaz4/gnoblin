@@ -384,10 +384,15 @@ class ScriptHost {
         this._recoveryShutdown = global.connect("shutdown", () => this._clearRecovery());
     }
 
-    // Leaves a marker for the next session until the scripts about to load
-    // have run for the recovery window.
+    // Leaves a marker while scripts initialize and during their recovery
+    // window. Start the timeout only after initialization finishes.
     _markRecovery() {
         this._recoveryMarker.replace_contents("User scripts active", null, false, Gio.FileCreateFlags.PRIVATE, null);
+        if (this._recoveryTimeoutId) GLib.source_remove(this._recoveryTimeoutId);
+        this._recoveryTimeoutId = 0;
+    }
+
+    _startRecoveryWindow() {
         if (this._recoveryTimeoutId) GLib.source_remove(this._recoveryTimeoutId);
         this._recoveryTimeoutId = GLib.timeout_add_seconds(
             GLib.PRIORITY_DEFAULT,
@@ -510,11 +515,13 @@ class ScriptHost {
             );
             return;
         }
-        this._markRecovery();
 
+        const scripts = this._scriptPaths();
+        if (scripts.length > 0) this._markRecovery();
+        else this._clearRecovery();
         const gen = ++this._generation;
         const failures = [];
-        for (const [name, path] of this._scriptPaths()) {
+        for (const [name, path] of scripts) {
             // First import in the process uses the plain URI; every later (re)load
             // cache-busts so code edits take effect. Module-level seq so a re-enable
             // in the same process is still fresh.
@@ -557,6 +564,8 @@ class ScriptHost {
                 logError(e, `gnoblin-script: ${name} threw on load`);
             }
         }
+
+        if (scripts.length > 0) this._startRecoveryWindow();
 
         if (failures.length > 0) throw new Error(`failed to load scripts: ${failures.join(", ")}`);
     }

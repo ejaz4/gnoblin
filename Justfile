@@ -83,6 +83,10 @@ test-native-chrome: gnome-native-chrome-verify
 # Test the user scripting lifecycle.
 test-scripting: gnome-scripting-verify
 
+# Test script recovery markers, including delayed and empty script startup.
+test-script-lifecycle:
+    node --test tests/script-lifecycle.test.mjs
+
 # Test notification ownership can move between Gnoblin and another daemon.
 test-notifications: gnome-notifications-verify
 
@@ -486,6 +490,7 @@ verify-fast:
     python3 tests/private-deps.test.py
     python3 tests/window-lifecycle-fuzz.test.py
     python3 tests/e2e/app-catalog.test.py
+    just test-script-lifecycle
     just test-config
 
 # Every isolated headless integration check against an existing ./install.

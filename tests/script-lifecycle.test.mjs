@@ -92,12 +92,19 @@ const recoveryDir = () =>
 const markers = () => (existsSync(recoveryDir()) ? readdirSync(recoveryDir()).sort() : []);
 
 // A new compositor process, and its script host's first load.
-async function startCompositor(pid) {
+async function startCompositor(pid, scriptSource = "export default () => {};") {
     compositor.pid = pid;
     compositor.live = new Set([pid]);
     compositor.timeouts.clear();
     compositor.shutdown = [];
     const host = new ScriptHost({}, new EventBus());
+    if (scriptSource === null) {
+        host._scriptPaths = () => [];
+    } else {
+        const scriptPath = join(state, `${pid}.mjs`);
+        writeFileSync(scriptPath, scriptSource);
+        host._scriptPaths = () => [[`${pid}.mjs`, scriptPath]];
+    }
     await host.load();
     return host;
 }
@@ -218,6 +225,49 @@ test("a reload puts the scripts back on probation", async () => {
     assert.equal(compositor.timeouts.size, 1);
 
     host.destroy();
+    assert.deepEqual(markers(), []);
+    assert.equal(compositor.timeouts.size, 0);
+});
+
+test("recovery window starts after an asynchronous script finishes initializing", async () => {
+    freshState();
+    let signalStarted;
+    const startupStarted = new Promise((resolve) => (signalStarted = resolve));
+    globalThis.scriptStartupStarted = () => signalStarted();
+    const source = `export default async () => {
+        globalThis.scriptStartupStarted();
+        await new Promise(resolve => { globalThis.finishScriptStartup = resolve; });
+    };`;
+
+    const pendingHost = startCompositor("600", source);
+    try {
+        await startupStarted;
+        assert.deepEqual(markers(), ["600.running"]);
+        assert.equal(compositor.timeouts.size, 0);
+
+        // A long startup must not consume the time reserved for a crash after
+        // the script actually begins running.
+        fireTimeouts();
+        assert.deepEqual(markers(), ["600.running"]);
+
+        globalThis.finishScriptStartup();
+        const host = await pendingHost;
+        assert.deepEqual(
+            [...compositor.timeouts.values()].map(({ seconds }) => seconds),
+            [60],
+        );
+        fireTimeouts();
+        assert.deepEqual(markers(), []);
+        host.destroy();
+    } finally {
+        delete globalThis.scriptStartupStarted;
+        delete globalThis.finishScriptStartup;
+    }
+});
+
+test("a session with no user scripts leaves no recovery marker", async () => {
+    freshState();
+    await startCompositor("700", null);
     assert.deepEqual(markers(), []);
     assert.equal(compositor.timeouts.size, 0);
 });
