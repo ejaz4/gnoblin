@@ -89,6 +89,10 @@ test-brightness-backlight:
     test -f subprojects/gnome-shell/js/misc/brightnessManager.js || { echo "prepare the patched GNOME Shell tree with 'just build-local' first" >&2; exit 1; }
     node --test tests/brightness-follows-backlight.test.mjs
 
+# Test script recovery markers, including delayed and empty script startup.
+test-script-lifecycle:
+    node --test tests/script-lifecycle.test.mjs
+
 # Test notification ownership can move between Gnoblin and another daemon.
 test-notifications: gnome-notifications-verify
 
@@ -492,6 +496,7 @@ verify-fast:
     python3 tests/private-deps.test.py
     python3 tests/window-lifecycle-fuzz.test.py
     python3 tests/e2e/app-catalog.test.py
+    just test-script-lifecycle
     just test-config
 
 # Every isolated headless integration check against an existing ./install.
